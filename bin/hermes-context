@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Launch Hermes with the context-kb skill preloaded, so Hermes shares the same
+# KB discipline as Claude Code and Codex.
+#
+# Optional integration: `hermes` is a separate tool, not shipped here. If it
+# isn't installed this just exits cleanly — the Claude Code and Codex
+# integrations work fine without it.
+set -euo pipefail
+if ! command -v hermes >/dev/null 2>&1; then
+  echo "hermes not found on PATH. This is an optional integration; install Hermes" >&2
+  echo "first, or use the Claude Code / Codex integrations instead." >&2
+  exit 127
+fi
+exec hermes --skills context-kb "$@"

@@ -19,6 +19,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))  # repo root
 EVENT_HOOK = {
     "session-start": "hooks/session-start-hook.sh",
     "user-prompt-submit": "hooks/symptom-lesson-retriever.sh",
+    "post-tool-use": "hooks/post-tool-use-hook.sh",
     "stop": "hooks/lesson-capture-hook.sh",
 }
 

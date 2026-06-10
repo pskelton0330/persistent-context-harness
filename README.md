@@ -25,23 +25,31 @@ stays free of any of your content or secrets by design (see
 ```sh
 git clone <your-fork-url> persistent-context-harness
 cd persistent-context-harness
-bash install/bootstrap.sh
+bash install/bootstrap.sh        # core only — no agent required
 export PATH="$PWD/bin:$PATH"
 
-kb context            # see what would be primed
-kb recall "timeout"   # find matching lessons
+kb-selftest                      # verify it works + see which agents are wired
+kb context                       # see what would be primed
+kb recall "timeout"              # find matching lessons
 kb lesson "my first lesson"
 secret put example.api.key && secret list
 ```
 
-Then wire your agents:
+## Use one, two, or all three agents
 
-- **Claude Code** — merge `config/claude-settings.generated.json` (written by
-  bootstrap) into `~/.claude/settings.json`, and copy `agents/claude/CLAUDE.md`
-  into your project (or `~/.claude/CLAUDE.md`).
+Each agent integration is **independent** — wire only the ones you use. Claude
+Code alone, Codex alone, Claude + Codex, or all three are all valid setups;
+nothing depends on the others being installed.
+
+- **Claude Code** — `bash install/install-claude.sh`, then merge the generated
+  `config/claude-settings.generated.json` `"hooks"` into `~/.claude/settings.json`
+  and use `agents/claude/CLAUDE.md` + `agents/claude/commands/`.
 - **Codex / ChatGPT** — `bash install/install-codex.sh`.
-- **Other agents** — load the shared skill at
-  `agents/shared-skill/context-kb/`.
+- **Hermes** (optional/external) — `bash install/install-hermes.sh`, launch with
+  `bin/hermes-context`.
+
+Run `kb-selftest` any time to confirm the core works and see each agent's status
+(`WIRED` / `READY` / `absent (skipped)`).
 
 ## Configuration
 

@@ -17,6 +17,14 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          { "type": "command", "command": "bash PCH_DIR/hooks/post-tool-use-hook.sh" }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

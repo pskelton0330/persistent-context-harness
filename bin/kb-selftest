@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# kb-selftest — verify the harness works, and report which agents are wired.
+#
+# Core checks must pass. Agent checks are informational: an agent you don't use
+# is reported as "absent (skipped)", never a failure — any subset of
+# Claude / Codex / Hermes is a valid setup. Exit 0 iff core checks pass.
+set -euo pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_common.sh"
+
+pass=0 fail=0
+ok()   { printf '  \033[32mPASS\033[0m  %s\n' "$1"; pass=$((pass+1)); }
+bad()  { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=$((fail+1)); }
+info() { printf '  %s\n' "$1"; }
+
+echo "== core =="
+KB="$PCH_BIN_DIR/kb"
+
+"$KB" context >/dev/null 2>&1 && ok "kb context runs" || bad "kb context"
+"$KB" recall "startup timeout error" >/dev/null 2>&1 && ok "kb recall runs" || bad "kb recall"
+"$KB" health >/dev/null 2>&1 && ok "kb health runs (example KB clean)" || bad "kb health"
+
+tmp="$(mktemp -d)"
+if KB_ROOT="$tmp" "$KB" lesson "selftest scaffold check" >/dev/null 2>&1 \
+   && ls "$tmp"/lessons/*-selftest-scaffold-check.md >/dev/null 2>&1; then
+  ok "kb lesson scaffolds a file"
+else bad "kb lesson scaffold"; fi
+rm -rf "$tmp"
+
+# Secret round-trip against the OS keychain (fake value, cleaned up after).
+sidx="$(mktemp)"; alias="pch.selftest.$$"; fake="selftest-fake-value-$$"
+if printf '%s\n' "$fake" | KB_SECRET_INDEX="$sidx" "$PCH_BIN_DIR/secret" put "$alias" >/dev/null 2>&1 \
+   && [ "$(KB_SECRET_INDEX="$sidx" "$PCH_BIN_DIR/secret" get "$alias" 2>/dev/null)" = "$fake" ]; then
+  ok "secret put/get round-trips via the keychain"
+else bad "secret put/get"; fi
+# cleanup keychain entry (best effort, both backends)
+security delete-generic-password -a "$alias" -s "$KB_SECRET_SERVICE" >/dev/null 2>&1 || true
+secret-tool clear service "$KB_SECRET_SERVICE" account "$alias" >/dev/null 2>&1 || true
+rm -f "$sidx"
+
+if printf '{"prompt":"the token=abcdef0123456789xyz is here"}' \
+   | python3 "$PCH_BIN_DIR/credential-guard" 2>/dev/null | grep -q '"block"'; then
+  ok "credential-guard blocks a raw secret"
+else bad "credential-guard"; fi
+
+echo "== agents (absent = skipped, not a failure) =="
+report_agent() { # name  cli  wired-test-cmd  wired-target
+  local name="$1" cli="$2" cfg="$3"
+  local have_cli=no wired=no
+  command -v "$cli" >/dev/null 2>&1 && have_cli=yes
+  [ -n "$cfg" ] && [ -f "$cfg" ] && grep -q "$PCH_ROOT" "$cfg" 2>/dev/null && wired=yes
+  if [ "$have_cli" = no ] && [ "$wired" = no ]; then
+    info "$name: absent (skipped)"
+  elif [ "$wired" = yes ]; then
+    printf '  \033[32mWIRED\033[0m %s (config references this repo)\n' "$name"
+  else
+    printf '  \033[33mREADY\033[0m %s CLI present but not wired yet — run install/install-%s.sh\n' "$name" "$(printf '%s' "$name" | tr 'A-Z' 'a-z')"
+  fi
+}
+report_agent Claude claude "$HOME/.claude/settings.json"
+report_agent Codex  codex  "$HOME/.codex/hooks.json"
+# Hermes: skill-based, not config-path based.
+if command -v hermes >/dev/null 2>&1; then
+  [ -f "$HOME/.agents/skills/context-kb/SKILL.md" ] \
+    && printf '  \033[32mWIRED\033[0m Hermes (context-kb skill installed)\n' \
+    || printf '  \033[33mREADY\033[0m Hermes CLI present but skill not installed — run install/install-hermes.sh\n'
+else
+  info "Hermes: absent (skipped)"
+fi
+
+echo "== summary =="
+echo "  core: $pass passed, $fail failed"
+[ "$fail" -eq 0 ] && { echo "  OK — the harness works. Wire whichever agents you use."; exit 0; }
+echo "  FAILED — see above."; exit 1

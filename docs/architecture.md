@@ -11,13 +11,25 @@ so the same problem is never solved twice.
 bin/kb               context | recall | lesson | health   (the KB CLI)
 bin/secret           put | get | run | list                (keychain-backed)
 bin/credential-guard blocks raw secrets in prompts
-hooks/               session-start, symptom-retriever, lesson-capture (shared)
+bin/hermes-context   launch Hermes with the context-kb skill (optional)
+bin/kb-selftest      verify core + report which agents are wired
+hooks/               session-start, symptom-retriever, post-tool-use, lesson-capture (shared)
 agents/claude/       CLAUDE.md guidelines, settings.json, slash commands
 agents/codex/        hooks.json + a shim that reuses the shared shell hooks
-agents/shared-skill/ the context-kb skill (Claude + Codex + others)
+agents/shared-skill/ the context-kb skill (Claude + Codex + Hermes)
 wiki/                example KB skeleton (your real content can live elsewhere)
-install/             bootstrap.sh, install-codex.sh
+install/             bootstrap.sh + install-claude.sh / install-codex.sh / install-hermes.sh
 ```
+
+## Independent, optional agents
+
+Every integration is self-contained: Claude Code reads its hooks from
+`~/.claude/settings.json`, Codex reads `~/.codex/hooks.json`, and Hermes loads
+the `~/.agents/skills/context-kb` skill. None of them import or require the
+others, so any subset is a valid install. The per-agent installers each tolerate
+their agent being absent (they install config for when you add it). The four
+hook events (SessionStart, UserPromptSubmit, PostToolUse, Stop) are wired
+identically for Claude Code and Codex via the shared `hooks/` scripts.
 
 ## How priming works
 

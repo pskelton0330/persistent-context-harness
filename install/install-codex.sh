@@ -8,6 +8,10 @@ ROOT="$(cd "$HERE/.." && pwd)"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 AGENTS_HOME="${AGENTS_HOME:-$HOME/.agents}"
 
+command -v codex >/dev/null 2>&1 \
+  && echo "-- detected the 'codex' CLI" \
+  || echo "-- note: 'codex' CLI not on PATH; installing config anyway for when you add it"
+
 mkdir -p "$CODEX_HOME"
 sed "s#PCH_DIR#$ROOT#g" "$ROOT/agents/codex/hooks.json.example" > "$CODEX_HOME/hooks.json"
 echo "Installed Codex hooks -> $CODEX_HOME/hooks.json (pointing at $ROOT)"

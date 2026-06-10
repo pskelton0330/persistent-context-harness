@@ -14,5 +14,11 @@ stamp="${TMPDIR:-/tmp}/pch-lesson-nudge-${sid:-default}"
 [ -e "$stamp" ] && exit 0
 : > "$stamp"
 
-echo "If this session fixed a non-trivial bug, hit a surprising root cause, or made"
-echo "a non-obvious decision, capture it: kb lesson \"<short title>\" (then fill it in)."
+# If the PostToolUse hook recorded edits this session, give an edit-aware nudge.
+if [ -e "${TMPDIR:-/tmp}/pch-edits/${sid:-default}" ]; then
+  echo "This session edited files. If the fix was non-trivial, hit a surprising root"
+  echo "cause, or made a non-obvious decision, capture it: kb lesson \"<short title>\"."
+else
+  echo "If this session fixed a non-trivial bug, hit a surprising root cause, or made"
+  echo "a non-obvious decision, capture it: kb lesson \"<short title>\" (then fill it in)."
+fi

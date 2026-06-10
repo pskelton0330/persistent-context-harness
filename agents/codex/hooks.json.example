@@ -17,6 +17,14 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "^apply_patch$",
+        "hooks": [
+          { "type": "command", "command": "python3 PCH_DIR/agents/codex/hooks/codex_hook.py post-tool-use", "timeout": 5 }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Bootstrap the persistent context harness (macOS or Linux). Idempotent.
+# Core bootstrap for the persistent context harness (macOS or Linux). Idempotent.
+# Sets up the CLIs and config only — it does NOT require any agent. Wire the
+# agent(s) you actually use afterward with the per-agent installers; any subset
+# (just Claude, just Codex, Claude+Codex, all three…) works on its own.
 #   bash install/bootstrap.sh
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 case "$(uname -s)" in Darwin) OS=mac ;; Linux) OS=linux ;; *) OS=other ;; esac
 
-echo "== persistent-context-harness bootstrap ($OS) =="
+echo "== persistent-context-harness core bootstrap ($OS) =="
 echo "   repo: $ROOT"
 
 # 1. Make the CLIs and hooks executable.
@@ -21,26 +24,22 @@ else
   echo "-- config/harness.env already exists"
 fi
 
-# 3. Generate a ready-to-merge Claude Code settings snippet with paths filled in.
-gen="$ROOT/config/claude-settings.generated.json"
-sed "s#PCH_DIR#$ROOT#g" "$ROOT/agents/claude/settings.json.example" > "$gen"
-echo "-- wrote $gen (merge its \"hooks\" into your ~/.claude/settings.json)"
-
-# 4. Dependency check.
-echo "== dependencies =="
-deps="bash git python3"
-[ "$OS" = linux ] && deps="$deps secret-tool"
-for c in $deps; do command -v "$c" >/dev/null 2>&1 && echo "  ok      $c" || echo "  MISSING $c"; done
+# 3. Dependency check (core needs only bash + python3; git optional).
+echo "== core dependencies =="
+for c in bash python3; do command -v "$c" >/dev/null 2>&1 && echo "  ok      $c" || echo "  MISSING $c"; done
+[ "$OS" = linux ] && { command -v secret-tool >/dev/null 2>&1 && echo "  ok      secret-tool" || echo "  MISSING secret-tool (libsecret; needed for the secret CLI on Linux)"; }
 
 cat <<EOF
 
 == next steps ==
   1. Add the CLIs to your PATH:
        export PATH="$ROOT/bin:\$PATH"   # add to ~/.bashrc or ~/.zshrc
-  2. Point KB_ROOT at your real (private) notes dir in config/harness.env,
-     or leave it to use this repo's example wiki/.
-  3. Claude Code: merge config/claude-settings.generated.json into ~/.claude/settings.json
-  4. Codex/ChatGPT (optional): bash install/install-codex.sh
-  5. Store a secret to test: secret put example.api.key   (then: secret list)
+  2. (optional) Point KB_ROOT at your real notes dir in config/harness.env.
+  3. Verify: bin/kb-selftest
+
+  Wire only the agent(s) you use — each is independent:
+       bash install/install-claude.sh    # Claude Code
+       bash install/install-codex.sh     # Codex / ChatGPT
+       bash install/install-hermes.sh    # Hermes (optional/external)
 Done.
 EOF
