@@ -66,6 +66,26 @@ cp config/harness.env.example config/harness.env
 | `KB_RETRIEVER` | `keyword` (default) or `semantic` (bring your own backend) |
 | `KB_SECRET_BACKEND` | `auto` / `macos` / `libsecret` |
 
+## Viewing the KB
+
+The knowledge base is **plain markdown** — nothing more. All you need to read or
+edit it is a text editor and a terminal:
+
+```sh
+$EDITOR "$KB_ROOT/index.md"          # browse the map of content
+grep -rl "timeout" "$KB_ROOT/lessons" # find lessons by hand
+kb context                            # see exactly what the agents are primed with
+```
+
+The agents read these files directly (the `kb` CLI uses `cat`/`grep` under the
+hood) — there is **no app or database** in the loop and nothing to keep running.
+
+Pages link to each other with `[[wikilink]]` syntax. That's just text the harness
+resolves itself (`kb health` validates the links), so any editor works. If you
+happen to use **[Obsidian](https://obsidian.md)**, you can point it at `KB_ROOT`
+("Open folder as vault") to get clickable backlinks and a graph view as a bonus —
+but it's entirely optional and the harness neither needs nor touches it.
+
 ## Layout
 
 See [docs/architecture.md](docs/architecture.md) for the full component map and
