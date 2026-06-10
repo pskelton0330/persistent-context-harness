@@ -1,0 +1,28 @@
+{
+  "_comment": "Installed to ~/.codex/hooks.json by install/install-codex.sh, which rewrites PCH_DIR to your checkout path. The credential-guard runs on every prompt to block raw secrets.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          { "type": "command", "command": "python3 PCH_DIR/agents/codex/hooks/codex_hook.py session-start", "timeout": 15 }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python3 PCH_DIR/agents/codex/hooks/codex_hook.py user-prompt-submit", "timeout": 20 },
+          { "type": "command", "command": "python3 PCH_DIR/bin/credential-guard", "timeout": 5 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python3 PCH_DIR/agents/codex/hooks/codex_hook.py stop", "timeout": 10 }
+        ]
+      }
+    ]
+  }
+}

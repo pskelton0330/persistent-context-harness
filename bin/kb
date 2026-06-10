@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# kb — knowledge-base CLI for the persistent context harness.
+# Subcommands: context, recall, lesson, health.
+set -euo pipefail
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_common.sh"
+
+usage() {
+  cat <<EOF
+kb — persistent context harness
+
+  kb context [dir]        Print hot context for a work dir (default: \$PWD).
+  kb recall <symptom...>  Find lessons matching a symptom before debugging.
+  kb lesson <title...>    Scaffold a new dated lesson in \$KB_ROOT/lessons.
+  kb health               Structural check (broken links, missing sections).
+
+KB_ROOT = $KB_ROOT
+EOF
+}
+
+# Guess the system page for a work dir from its basename.
+detect_system() {
+  local dir="$1" base page
+  base="$(basename "$(cd "$dir" 2>/dev/null && pwd || echo "$dir")")"
+  page="$KB_ROOT/systems/$base.md"
+  [ -f "$page" ] && echo "$page"
+}
+
+cmd_context() {
+  local dir="${1:-$PWD}"
+  if [ -f "$KB_ROOT/hot.md" ]; then
+    cat "$KB_ROOT/hot.md"
+  else
+    echo "# (no $KB_ROOT/hot.md yet — add always-loaded context there)"
+  fi
+  local sys; sys="$(detect_system "$dir" || true)"
+  if [ -n "${sys:-}" ]; then
+    echo; echo "## Detected system page: $sys"
+    # Surface linked lessons referenced on the system page.
+    grep -oE '\[\[[^]]+\]\]' "$sys" 2>/dev/null | sed 's/[][]//g' | sort -u | sed 's/^/  - /' || true
+  fi
+}
+
+cmd_recall() {
+  [ "$#" -gt 0 ] || pch_die "recall needs a symptom, e.g. kb recall \"timeout on startup\""
+  local dir="$KB_ROOT/lessons"
+  [ -d "$dir" ] || pch_die "no lessons dir at $dir"
+  # Score each lesson by how many query words it contains (keyword retriever).
+  local q; q="$(printf '%s' "$*" | tr 'A-Z' 'a-z')"
+  local results="" f
+  for f in "$dir"/*.md; do
+    [ -e "$f" ] || continue
+    local body n=0 w
+    body="$(tr 'A-Z' 'a-z' < "$f")"
+    for w in $q; do
+      [ "${#w}" -ge 3 ] || continue
+      case "$body" in *"$w"*) n=$((n+1)) ;; esac
+    done
+    [ "$n" -gt 0 ] && results+="$n	$f"$'\n'
+  done
+  if [ -n "$results" ]; then
+    printf '%s' "$results" | sort -rn | sed 's/^\([0-9][0-9]*\)\t/[\1 match] /'
+  else
+    echo "(no matching lessons — proceed, then capture one with: kb lesson \"...\")"
+  fi
+  return 0
+}
+
+cmd_lesson() {
+  [ "$#" -gt 0 ] || pch_die "lesson needs a title, e.g. kb lesson \"db pool exhaustion under load\""
+  local title="$*" date slug file
+  date="$(date +%Y-%m-%d)"
+  slug="$(printf '%s' "$title" | tr 'A-Z' 'a-z' | tr -cs 'a-z0-9' '-' | sed 's/^-//;s/-$//')"
+  file="$KB_ROOT/lessons/$date-$slug.md"
+  mkdir -p "$KB_ROOT/lessons"
+  [ -e "$file" ] && pch_die "already exists: $file"
+  cat > "$file" <<EOF
+---
+type: lesson
+date: $date
+severity: medium
+systems: []
+---
+
+# $title
+
+## Symptom
+<what broke, how it presented>
+
+## Root cause
+<the underlying truth>
+
+## Fix
+<what resolved it>
+
+## Prevention
+<how to avoid it next time>
+
+## References
+- <links to related systems/lessons, e.g. [[example-service]]>
+EOF
+  echo "created $file"
+}
+
+cmd_health() {
+  local problems=() f s tgt
+  # Lessons missing a required section.
+  for f in "$KB_ROOT"/lessons/*.md; do
+    [ -e "$f" ] || continue
+    for s in Symptom "Root cause" Fix Prevention; do
+      grep -q "^## $s" "$f" || problems+=("missing '## $s': $f")
+    done
+  done
+  # Broken [[wikilinks]] — target .md not found anywhere under KB_ROOT.
+  for f in $(grep -rlE '\[\[' "$KB_ROOT" --include='*.md' 2>/dev/null); do
+    while IFS= read -r tgt; do
+      [ -n "$tgt" ] || continue
+      find "$KB_ROOT" -name "$tgt.md" 2>/dev/null | grep -q . \
+        || problems+=("broken link [[$tgt]] in: $f")
+    done < <(sed 's/`[^`]*`//g' "$f" | grep -oE '\[\[[^]|]+' | sed 's/\[\[//' | sort -u)
+  done
+  local p
+  for p in "${problems[@]:-}"; do [ -n "$p" ] && echo "$p"; done
+  echo "health check: ${#problems[@]} issue(s)"
+  [ "${#problems[@]}" -eq 0 ]
+}
+
+main() {
+  local sub="${1:-}"; shift || true
+  case "$sub" in
+    context) cmd_context "$@" ;;
+    recall)  cmd_recall "$@" ;;
+    lesson)  cmd_lesson "$@" ;;
+    health)  cmd_health "$@" ;;
+    ""|-h|--help|help) usage ;;
+    *) pch_die "unknown subcommand: $sub (try: kb --help)" ;;
+  esac
+}
+main "$@"

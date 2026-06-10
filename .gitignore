@@ -1,0 +1,34 @@
+# ── Local config (may contain machine-specific paths) ──
+config/harness.env
+config/claude-settings.generated.json
+config/secret-aliases.list
+
+# ── Private content. The harness ships only the example wiki/ skeleton.
+#    Point KB_ROOT at a SEPARATE, private location for real notes — never
+#    commit real lessons, systems, or credential aliases into this repo. ──
+private/
+local/
+*.private.md
+
+# ── Secrets must never be committed. Raw values live in the OS keychain. ──
+.env
+*.env
+!*.env.example
+*.key
+*.pem
+id_rsa*
+id_ed25519*
+*.p12
+*.pfx
+credentials.json
+secrets.json
+.secrets/
+
+# ── OS / editor cruft ──
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+__pycache__/
+*.pyc

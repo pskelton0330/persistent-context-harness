@@ -1,0 +1,28 @@
+{
+  "_comment": "Copy the relevant hooks into your ~/.claude/settings.json (or a project .claude/settings.json). Replace PCH_DIR with the absolute path to your persistent-context-harness checkout, e.g. /home/you/persistent-context-harness.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          { "type": "command", "command": "bash PCH_DIR/hooks/session-start-hook.sh" }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "bash PCH_DIR/hooks/symptom-lesson-retriever.sh" },
+          { "type": "command", "command": "python3 PCH_DIR/bin/credential-guard" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "bash PCH_DIR/hooks/lesson-capture-hook.sh" }
+        ]
+      }
+    ]
+  }
+}

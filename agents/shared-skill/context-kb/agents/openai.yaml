@@ -1,0 +1,4 @@
+interface:
+  display_name: "Context KB"
+  short_description: "Persistent KB context, lesson recall, and credential aliases"
+  default_prompt: "Use the Context KB workflow for this task."
