@@ -158,6 +158,48 @@ check "embed dim out of range"        KB_EMBED_DIM 'KB_EMBED_DIM=999999999\n'
 big="$(head -c 70000 /dev/zero | tr '\0' '#')"
 check "oversized config rejected"     KB_EMBED_MODEL "# ${big}\nKB_EMBED_MODEL=toobig\n"
 
+# --------------------------------------------------------------------------
+# Strict-mode sourcing. Every bin/ script runs `set -euo pipefail`, so
+# _common.sh must survive it. This is tested separately because the value
+# fixtures above source without strict mode and therefore cannot catch it --
+# a real regression shipped where an unset-variable expansion under `set -u`
+# killed the whole CLI, and the 44 fixtures above all still passed.
+# --------------------------------------------------------------------------
+echo
+echo "== strict-mode sourcing (set -eu) =="
+# Restore a normal config: the last fixture above deliberately leaves an
+# oversized file behind, and its (correct) warning is not what we test here.
+printf 'KB_EMBED_MODEL=normal\n' > "$HARNESS/config/harness.env"
+
+# stderr is kept separate — diagnostics are allowed; a non-zero exit or missing
+# stdout is not.
+for shell in $SHELLS; do
+  # Clean environment (nothing preset) is the case that broke.
+  if out="$("$shell" -c 'set -eu; . "$1/bin/_common.sh"; printf ok' _ "$HARNESS" 2>/dev/null)" \
+     && [ "$out" = "ok" ]; then
+    PASS=$((PASS + 1)); printf '  ok    %-44s clean env\n' "$shell"
+  else
+    FAIL=$((FAIL + 1)); printf '  FAIL  %-44s clean env (exit/stdout wrong)\n' "$shell"
+  fi
+  # And with variables preset, which takes the other branch.
+  if out="$(KB_ROOT=/x KB_RETRIEVER=semantic "$shell" -c 'set -eu; . "$1/bin/_common.sh"; printf ok' _ "$HARNESS" 2>/dev/null)" \
+     && [ "$out" = "ok" ]; then
+    PASS=$((PASS + 1)); printf '  ok    %-44s preset env\n' "$shell"
+  else
+    FAIL=$((FAIL + 1)); printf '  FAIL  %-44s preset env (exit/stdout wrong)\n' "$shell"
+  fi
+done
+
+echo
+echo "== CLI smoke (the entry point users actually run) =="
+for sub in "--help" "health"; do
+  if "$HARNESS/bin/kb" $sub >/dev/null 2>&1; then
+    PASS=$((PASS + 1)); printf '  ok    kb %-41s\n' "$sub"
+  else
+    FAIL=$((FAIL + 1)); printf '  FAIL  kb %-41s exited %s\n' "$sub" "$?"
+  fi
+done
+
 echo
 echo "== summary =="
 echo "  $PASS passed, $FAIL failed"

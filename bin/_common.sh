@@ -97,8 +97,16 @@ _pch_split() { printf '%s' "$1" | tr "$2" '\n'; }
 _pch_preset=" "
 while IFS= read -r _k; do
   [ -n "$_k" ] || continue
-  eval "_pch_v=\${$_k}" 2>/dev/null || _pch_v=""
-  [ -n "${_pch_v:-}" ] && _pch_preset="$_pch_preset$_k "
+  # `:-` is required: callers run with `set -u`, where expanding an unset
+  # variable is a fatal error. The zsh problem was the ${$name} indirection
+  # form, not the default -- after expansion this is a plain ${KB_ROOT:-}.
+  eval "_pch_v=\${$_k:-}" 2>/dev/null || _pch_v=""
+  # `if`, not `[ ] && ...`: an AND-list whose test fails returns non-zero, and
+  # as the last statement in a loop or function that aborts any caller running
+  # under `set -e` (which every bin/ script does).
+  if [ -n "${_pch_v:-}" ]; then
+    _pch_preset="$_pch_preset$_k "
+  fi
 done <<EOF
 $(_pch_split "$PCH_KEYS" ' ')
 EOF
@@ -230,23 +238,28 @@ _pch_load_config() {
     eval "$_key=\$_val"
   done < "$_cfg"
   unset _cfg _line _key _val _rest _tail _t
+  return 0
 }
 
 # Config warnings go to stderr, at most a few, so a malformed file is visible
 # rather than silently half-applied.
 _pch_cfg_warned=0
 _pch_cfg_warn() {
-  [ "$_pch_cfg_warned" -ge 5 ] && return 0
-  _pch_cfg_warned=$((_pch_cfg_warned + 1))
-  echo "context-harness: config: $*; line ignored" >&2
+  if [ "$_pch_cfg_warned" -lt 5 ]; then
+    _pch_cfg_warned=$((_pch_cfg_warned + 1))
+    echo "context-harness: config: $*; line ignored" >&2
+  fi
+  return 0
 }
 
 # A note is for a value that IS applied but may not behave as a shell user
 # expects; a warn is for a line that is discarded.
 _pch_cfg_note() {
-  [ "$_pch_cfg_warned" -ge 5 ] && return 0
-  _pch_cfg_warned=$((_pch_cfg_warned + 1))
-  echo "context-harness: config: $*" >&2
+  if [ "$_pch_cfg_warned" -lt 5 ]; then
+    _pch_cfg_warned=$((_pch_cfg_warned + 1))
+    echo "context-harness: config: $*" >&2
+  fi
+  return 0
 }
 
 _pch_load_config
@@ -305,7 +318,9 @@ _pch_have_py() { command -v python3 >/dev/null 2>&1 && [ -f "$PCH_PY" ]; }
 # degradation is how a broken component hides for weeks; say so out loud.
 _pch_warned_fallback=""
 _pch_warn_fallback() {
-  [ -n "$_pch_warned_fallback" ] && return 0
+  if [ -n "$_pch_warned_fallback" ]; then
+    return 0
+  fi
   _pch_warned_fallback=1
   echo "context-harness: warning — lib/harness_config.py unavailable at" \
        "'$PCH_PY'; using reduced shell scope rules (project-roots.json and" \
