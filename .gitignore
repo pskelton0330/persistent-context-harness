@@ -3,6 +3,25 @@ config/harness.env
 config/claude-settings.generated.json
 config/secret-aliases.list
 
+# ── Generated state. KB_STATE_DIR defaults to ./state, so an ordinary
+#    `kb index` writes here. These artifacts are DERIVED FROM THE USER'S REAL
+#    LESSONS: the vector index embeds their content, and the retrieval log
+#    records their prompts. Committing any of it to a public repo would leak
+#    private knowledge, so ignore the whole directory and the file types by
+#    name in case KB_STATE_DIR is pointed somewhere else inside the repo. ──
+state/
+*.db
+*.db.tmp
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+retrieval-log.jsonl
+run-logs/
+gap-reports/
+audit-reports/
+crosslink-drafts/
+hot-md-drafts/
+
 # ── Private content. The harness ships only the example wiki/ skeleton.
 #    Point KB_ROOT at a SEPARATE, private location for real notes — never
 #    commit real lessons, systems, or credential aliases into this repo. ──
