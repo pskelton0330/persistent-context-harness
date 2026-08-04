@@ -12,6 +12,8 @@ ok()   { printf '  \033[32mPASS\033[0m  %s\n' "$1"; pass=$((pass+1)); }
 bad()  { printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=$((fail+1)); }
 info() { printf '  %s\n' "$1"; }
 
+warn() { printf '  \033[33mWARN\033[0m  %s\n' "$*"; }
+
 echo "== core =="
 KB="$PCH_BIN_DIR/kb"
 
@@ -42,6 +44,53 @@ if printf '{"prompt":"the token=abcdef0123456789xyz is here"}' \
   ok "credential-guard blocks a raw secret"
 else bad "credential-guard"; fi
 
+# ---------------------------------------------------------------------------
+# Retrieval stack. The core checks above only prove the zero-dependency keyword
+# path works. Reporting "the harness works" on that alone is how someone ends up
+# with a green check and a system that never surfaces a lesson.
+# ---------------------------------------------------------------------------
+echo "== retrieval =="
+degraded=0
+if [ "$KB_RETRIEVER" = "semantic" ]; then
+  py="${KB_PYTHON:-python3}"
+  if ! command -v "$py" >/dev/null 2>&1; then
+    warn "KB_PYTHON ($py) not executable — semantic disabled, keyword only"
+    degraded=1
+  elif ! "$py" -c 'import requests, sqlite_vec' >/dev/null 2>&1; then
+    warn "extras missing (requests/sqlite-vec) — run: bash install/install-extras.sh"
+    degraded=1
+  else
+    ok "semantic extras importable"
+    set +e
+    "$py" "$PCH_ROOT/lib/retrieval/lesson_retriever.py" --check >/tmp/pch-idx.$$ 2>&1
+    rc=$?
+    set -e
+    if [ "$rc" -eq 0 ]; then
+      ok "semantic index healthy ($(grep -c . /tmp/pch-idx.$$ >/dev/null 2>&1; grep '^lessons:' /tmp/pch-idx.$$ | head -1))"
+    else
+      warn "semantic index unusable: $(grep -E 'healthy:|index (missing|unreadable)' /tmp/pch-idx.$$ | head -1)"
+      warn "  build it with: bin/kb index"
+      degraded=1
+    fi
+    rm -f /tmp/pch-idx.$$
+  fi
+else
+  info "KB_RETRIEVER=keyword — semantic search intentionally disabled"
+fi
+
+# ---------------------------------------------------------------------------
+# Hooks. These are what actually change agent behaviour in a session; without
+# them the harness is a CLI, not a memory system.
+# ---------------------------------------------------------------------------
+echo "== hooks =="
+for h in session_start prompt_submit lesson_capture; do
+  if [ -f "$PCH_ROOT/hooks/$h.py" ] && python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$PCH_ROOT/hooks/$h.py" >/dev/null 2>&1; then
+    ok "hooks/$h.py present and parses"
+  else
+    bad "hooks/$h.py"
+  fi
+done
+
 echo "== agents (absent = skipped, not a failure) =="
 report_agent() { # name  cli  wired-test-cmd  wired-target
   local name="$1" cli="$2" cfg="$3"
@@ -69,5 +118,16 @@ fi
 
 echo "== summary =="
 echo "  core: $pass passed, $fail failed"
-[ "$fail" -eq 0 ] && { echo "  OK — the harness works. Wire whichever agents you use."; exit 0; }
-echo "  FAILED — see above."; exit 1
+if [ "$fail" -ne 0 ]; then
+  echo "  FAILED — see above."; exit 1
+fi
+if [ "${degraded:-0}" -ne 0 ]; then
+  # Deliberately not "OK". The core works, but recall is running in its weaker
+  # mode, and saying so plainly is the whole point of this check.
+  echo "  DEGRADED — core works, but semantic recall is unavailable."
+  echo "  Recall falls back to keyword matching, which is noticeably noisier."
+  echo "  Fix the warnings above, then re-run."
+  exit 0
+fi
+echo "  OK — core works and semantic recall is live. Wire whichever agents you use."
+exit 0

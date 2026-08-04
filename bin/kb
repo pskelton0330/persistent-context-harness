@@ -10,10 +10,13 @@ kb — persistent context harness
 
   kb context [dir]        Print hot context for a work dir (default: \$PWD).
   kb recall <symptom...>  Find lessons matching a symptom before debugging.
+  kb index [--incremental] Build the semantic index over \$KB_ROOT/lessons.
+  kb index --check        Report index health and why recall may be degraded.
   kb lesson <title...>    Scaffold a new dated lesson in \$KB_ROOT/lessons.
   kb health               Structural check (broken links, missing sections).
 
-KB_ROOT = $KB_ROOT
+KB_ROOT   = $KB_ROOT
+retriever = $KB_RETRIEVER (semantic falls back to keyword automatically)
 EOF
 }
 
@@ -40,10 +43,47 @@ cmd_context() {
   fi
 }
 
+# Recall has ONE entry point. Semantic search runs first when configured;
+# keyword scoring is the fallback and also augments a semantic result that came
+# back empty. The retriever's exit code is the contract: 0 = it ran (possibly
+# with no hits), 2 = semantic is unavailable or the index is unhealthy, so the
+# caller must fall back rather than report "no relevant lessons".
 cmd_recall() {
   [ "$#" -gt 0 ] || pch_die "recall needs a symptom, e.g. kb recall \"timeout on startup\""
+  [ -d "$KB_ROOT/lessons" ] || pch_die "no lessons dir at $KB_ROOT/lessons"
+
+  local semantic_out="" rc=1
+  if [ "$KB_RETRIEVER" = "semantic" ]; then
+    local py="${KB_PYTHON:-python3}"
+    if command -v "$py" >/dev/null 2>&1; then
+      set +e
+      semantic_out="$("$py" "$PCH_ROOT/lib/retrieval/lesson_retriever.py" "$*" 2>/dev/null)"
+      rc=$?
+      set -e
+    fi
+    if [ "$rc" -eq 0 ] && [ -n "$semantic_out" ]; then
+      printf '%s\n' "$semantic_out"
+      return 0
+    fi
+    if [ "$rc" -eq 2 ]; then
+      echo "(semantic recall unavailable — using keyword; run 'kb index --check' for why)" >&2
+    fi
+  fi
+
+  cmd_recall_keyword "$@"
+}
+
+cmd_index() {
+  local py="${KB_PYTHON:-python3}"
+  command -v "$py" >/dev/null 2>&1 || pch_die "no python3 (set KB_PYTHON in config/harness.env)"
+  case "${1:-}" in
+    --check) exec "$py" "$PCH_ROOT/lib/retrieval/lesson_retriever.py" --check ;;
+    *) exec "$py" "$PCH_ROOT/lib/retrieval/index_lessons.py" "$@" ;;
+  esac
+}
+
+cmd_recall_keyword() {
   local dir="$KB_ROOT/lessons"
-  [ -d "$dir" ] || pch_die "no lessons dir at $dir"
   # Score each lesson by how many query words it contains (keyword retriever).
   local q; q="$(printf '%s' "$*" | tr 'A-Z' 'a-z')"
   local results="" f
@@ -129,6 +169,7 @@ main() {
   case "$sub" in
     context) cmd_context "$@" ;;
     recall)  cmd_recall "$@" ;;
+    index)   cmd_index "$@" ;;
     lesson)  cmd_lesson "$@" ;;
     health)  cmd_health "$@" ;;
     ""|-h|--help|help) usage ;;
