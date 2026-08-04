@@ -67,11 +67,22 @@ echo "-- python $("$PYTHON" -V 2>&1) ($(command -v "$PYTHON"))"
 # ---------------------------------------------------------------------------
 # A dedicated venv rather than a global install: the harness should never fight
 # with a project's own dependencies, and KB_PYTHON makes the choice explicit.
-if [ -x "$VENV/bin/python" ]; then
+# Reuse only a venv that actually works. A previous failed run can leave one
+# that exists but has no pip (an interrupted ensurepip), and reusing that fails
+# later with a far more confusing error than just rebuilding it.
+if [ -x "$VENV/bin/python" ] && "$VENV/bin/python" -m pip --version >/dev/null 2>&1; then
   echo "-- reusing existing venv at $VENV"
 else
-  echo "-- creating venv at $VENV"
-  "$PYTHON" -m venv "$VENV"
+  if [ -e "$VENV" ]; then
+    echo "-- existing venv at $VENV is unusable (no working pip); recreating"
+    rm -rf "$VENV"
+  else
+    echo "-- creating venv at $VENV"
+  fi
+  if ! "$PYTHON" -m venv "$VENV"; then
+    echo "error: failed to create a virtualenv with $PYTHON" >&2
+    exit 1
+  fi
 fi
 VENV_PY="$VENV/bin/python"
 
