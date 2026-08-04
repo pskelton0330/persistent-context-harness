@@ -26,6 +26,14 @@ export KB_PROJECT_ROOTS="$PROJECT"
 export KB_STATE_DIR="$WORK/state"
 export KB_RETRIEVER=keyword   # no embedding backend needed for behaviour tests
 
+# lesson_capture marks "already fired" with a file keyed by session id, under
+# the system temp dir. Point TMPDIR at this run's workspace so those markers do
+# not survive into the next run — with fixed session ids in the fixtures below,
+# a leftover marker makes the once-per-session test fail on every run after the
+# first, which looks like a code regression and is not one.
+export TMPDIR="$WORK/tmp"
+mkdir -p "$TMPDIR"
+
 cat > "$KB/systems/project.md" <<'EOF'
 # project
 
