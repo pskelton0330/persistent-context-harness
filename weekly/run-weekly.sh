@@ -58,16 +58,33 @@ say "out:   $OUT_DIR"
 # ---------------------------------------------------------------------------
 # Deterministic steps
 # ---------------------------------------------------------------------------
-# Only when semantic is configured. On a keyword-only install there is no index
-# to rebuild, and reporting a FAILED step for something that does not apply is a
-# false alarm — which is corrosive here specifically, because this job's value
-# depends on a failure report being believed.
-if [ "$KB_RETRIEVER" = "semantic" ]; then
+# Reindex only when semantic search is both configured AND actually installed.
+#
+# The distinction is capability, not configuration: KB_RETRIEVER defaults to
+# semantic, so keying off it alone reports a FAILED step on every install where
+# the extras were never added — a capability that was never present has not
+# broken. That kind of false alarm is corrosive here specifically, because this
+# job's whole value rests on a failure report being believed.
+#
+# A build that fails when the extras ARE present is a real failure and stays loud.
+semantic_available() {
+  [ "$KB_RETRIEVER" = "semantic" ] || return 1
+  local py="${KB_PYTHON:-python3}"
+  command -v "$py" >/dev/null 2>&1 || return 1
+  "$py" -c 'import requests, sqlite_vec' >/dev/null 2>&1
+}
+
+if semantic_available; then
   step reindex "$ROOT/bin/kb" index --incremental
 else
   say ""
   say "---- reindex ----"
-  say "[reindex] skipped (KB_RETRIEVER=$KB_RETRIEVER, no semantic index)"
+  if [ "$KB_RETRIEVER" = "semantic" ]; then
+    say "[reindex] skipped — semantic configured but extras not installed."
+    say "          Recall is running in keyword mode. Fix: bash install/install-extras.sh"
+  else
+    say "[reindex] skipped (KB_RETRIEVER=$KB_RETRIEVER, no semantic index)"
+  fi
 fi
 
 retrieval_stats() {
