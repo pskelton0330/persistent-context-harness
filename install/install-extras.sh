@@ -22,17 +22,45 @@ echo "== context-harness extras =="
 # ---------------------------------------------------------------------------
 # Python
 # ---------------------------------------------------------------------------
-PYTHON="${PYTHON:-python3}"
-command -v "$PYTHON" >/dev/null 2>&1 || {
-  echo "error: no python3 on PATH. Install Python 3.9+ and re-run." >&2
-  exit 1
+# Pick an interpreter that can actually BUILD A WORKING VENV, rather than the
+# first one named python3. `python3` being present says nothing about whether it
+# works: some distributions ship a Python whose `ensurepip` is broken (Homebrew
+# 3.14 with a broken pyexpat is a current example), and venv creation fails
+# midway. Probing is a few seconds and turns a confusing stack trace into an
+# automatic fallback.
+usable_python() {
+  local candidate="$1" probe rc
+  command -v "$candidate" >/dev/null 2>&1 || return 1
+  "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)' 2>/dev/null || return 1
+  probe="$(mktemp -d)"
+  "$candidate" -m venv "$probe/v" >/dev/null 2>&1 && [ -x "$probe/v/bin/python" ]
+  rc=$?
+  rm -rf "$probe"
+  return $rc
 }
-ver="$("$PYTHON" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
-echo "-- python $ver ($PYTHON)"
-"$PYTHON" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)' || {
-  echo "error: python 3.9+ required, found $ver" >&2
+
+PYTHON=""
+if [ -n "${PYTHON_OVERRIDE:-}" ]; then
+  # Explicit override still gets probed, so a bad choice fails loudly here
+  # rather than halfway through creating the venv.
+  usable_python "$PYTHON_OVERRIDE" \
+    && PYTHON="$PYTHON_OVERRIDE" \
+    || { echo "error: PYTHON_OVERRIDE=$PYTHON_OVERRIDE cannot create a venv" >&2; exit 1; }
+else
+  for candidate in python3 python3.13 python3.12 python3.11 python3.10 python3.9; do
+    if usable_python "$candidate"; then PYTHON="$candidate"; break; fi
+    command -v "$candidate" >/dev/null 2>&1 \
+      && echo "-- skipping $candidate ($("$candidate" -V 2>&1)): cannot create a working venv"
+  done
+fi
+
+if [ -z "$PYTHON" ]; then
+  echo "error: no Python 3.9+ on PATH can create a working virtualenv." >&2
+  echo "       Install one (e.g. 'brew install python@3.13'), or point at a" >&2
+  echo "       known-good interpreter:  PYTHON_OVERRIDE=/path/to/python3 $0" >&2
   exit 1
-}
+fi
+echo "-- python $("$PYTHON" -V 2>&1) ($(command -v "$PYTHON"))"
 
 # ---------------------------------------------------------------------------
 # Virtualenv
