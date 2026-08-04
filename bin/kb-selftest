@@ -91,6 +91,37 @@ for h in session_start prompt_submit lesson_capture; do
   fi
 done
 
+# ---------------------------------------------------------------------------
+# Weekly self-improvement. Checked because a scheduled job that fails quietly is
+# worse than no job at all — capture keeps adding lessons while nothing curates
+# them, and quality decays invisibly.
+# ---------------------------------------------------------------------------
+echo "== weekly review =="
+last="$KB_STATE_DIR/weekly/last-run.json"
+if [ ! -f "$last" ]; then
+  info "never run — schedule it with: bash weekly/install-schedule.sh"
+else
+  ran="$(sed -n 's/.*"ran_at": *"\([^"]*\)".*/\1/p' "$last" | head -1)"
+  nfail="$(sed -n 's/.*"failed_steps": *\([0-9]*\).*/\1/p' "$last" | head -1)"
+  if [ "${nfail:-0}" -gt 0 ]; then
+    bad "last weekly run had ${nfail} failed step(s) at ${ran}"
+    warn "  see $KB_STATE_DIR/weekly/ for the log"
+  else
+    ok "last weekly run clean ($ran)"
+  fi
+  # Stale means the schedule is not firing, which looks identical to "nothing
+  # to do" unless it is checked.
+  if [ -n "$ran" ] && command -v python3 >/dev/null 2>&1; then
+    age=$(python3 -c "
+import datetime,sys
+try:
+    d=datetime.datetime.fromisoformat('$ran'.replace('Z','+00:00'))
+    print(int((datetime.datetime.now(datetime.timezone.utc)-d).days))
+except Exception: print(-1)")
+    [ "$age" -gt 14 ] && warn "last weekly run was $age days ago — is the schedule active?"
+  fi
+fi
+
 echo "== agents (absent = skipped, not a failure) =="
 report_agent() { # name  cli  wired-test-cmd  wired-target
   local name="$1" cli="$2" cfg="$3"

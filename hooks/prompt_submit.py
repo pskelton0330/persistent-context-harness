@@ -40,6 +40,13 @@ try:
 except Exception:  # pragma: no cover - never block a prompt
     sys.exit(0)
 
+try:
+    sys.path.insert(0, str(ROOT / "lib" / "retrieval"))
+    from retrieval_log import record
+except Exception:  # logging is best-effort; recall still works without it
+    def record(**_kwargs):  # type: ignore[misc]
+        return None
+
 # Problem-shaped language. Tuned toward over-triggering: a spurious lesson costs
 # a few tokens, while a missed one costs the whole point of the system.
 SYMPTOM_PATTERNS = [
@@ -118,6 +125,21 @@ def semantic(prompt: str) -> tuple[bool, str]:
     return True, out
 
 
+HIT_RE = re.compile(r"^- (\S+)\s+\[relevance=(\d+)%", re.MULTILINE)
+KEYWORD_HIT_RE = re.compile(r"^\[(\d+) match\] (\S+)", re.MULTILINE)
+
+
+def parse_hits(text: str, keyword_form: bool = False) -> list[dict]:
+    if keyword_form:
+        return [
+            {"path": path, "matches": int(count)}
+            for count, path in KEYWORD_HIT_RE.findall(text)
+        ]
+    return [
+        {"path": path, "relevance_pct": int(pct)} for path, pct in HIT_RE.findall(text)
+    ]
+
+
 def keyword(prompt: str) -> str:
     code, out = run([str(ROOT / "bin" / "kb"), "recall", prompt], 15)
     if code != 0 or not out or out.startswith("(no matching"):
@@ -169,13 +191,22 @@ def main() -> int:
     available, out = semantic(query)
     if available and out:
         emit(out)
+        record(cwd=cwd, prompt_len=len(prompt), retriever="semantic",
+               hits=parse_hits(out), fired=True)
         return 0
 
     # Semantic unavailable, or ran but found nothing. Keyword can still hit,
     # so recall degrades rather than disappearing.
+    degraded = CONFIG.retriever == "semantic" and not available
     out = keyword(query)
     if out:
         emit(out)
+    # A miss is logged too: "recall fired but found nothing" is exactly the
+    # signal the weekly review needs to spot gaps in the knowledge base.
+    record(cwd=cwd, prompt_len=len(prompt),
+           retriever="keyword" if out or degraded else CONFIG.retriever,
+           hits=parse_hits(out, keyword_form=True), fired=bool(out),
+           degraded=degraded)
     return 0
 
 
