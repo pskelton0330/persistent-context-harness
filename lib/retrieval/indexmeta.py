@@ -125,6 +125,13 @@ def rowid_integrity(conn: sqlite3.Connection) -> tuple[bool, str]:
         return False, f"{missing} lesson(s) have no vector"
     if orphaned:
         return False, f"{orphaned} orphaned vector row(s)"
-    if total == 0:
-        return False, "index is empty"
+    # An empty index is NOT unhealthy. A knowledge base starts empty and stays
+    # that way until the first lesson is captured; reporting that as a fault
+    # tells a new user their install is broken on day one, when it is working
+    # exactly as intended.
+    #
+    # The genuinely bad case — lessons on disk but absent from the index — is
+    # caught by the fingerprint comparison in index_health(), which compares the
+    # indexed lesson set against what is actually on disk.
+    del total
     return True, "ok"

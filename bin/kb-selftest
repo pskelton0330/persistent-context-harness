@@ -93,10 +93,18 @@ if [ "$KB_RETRIEVER" = "semantic" ]; then
     degraded=1; degraded_why="$degraded_why semantic"
   else
     ok "semantic extras importable"
+    # A brand-new knowledge base has no lessons yet. That is the expected
+    # starting state, not a fault, and it is the first thing a new user sees.
+    n_lessons=$(ls -1 "$KB_ROOT"/lessons/*.md 2>/dev/null | wc -l | tr -d ' ')
     set +e
     "$py" "$PCH_ROOT/lib/retrieval/lesson_retriever.py" --check >/tmp/pch-idx.$$ 2>&1
     rc=$?
     set -e
+    if [ "${n_lessons:-0}" -eq 0 ]; then
+      info "no lessons yet — capture your first with: kb lesson \"<title>\""
+      rm -f /tmp/pch-idx.$$
+      rc=0
+    fi
     if [ "$rc" -eq 0 ]; then
       ok "semantic index healthy ($(grep -c . /tmp/pch-idx.$$ >/dev/null 2>&1; grep '^lessons:' /tmp/pch-idx.$$ | head -1))"
     else

@@ -136,7 +136,8 @@ systems: []
 <how to avoid it next time>
 
 ## References
-- <links to related systems/lessons, e.g. [[example-service]]>
+- <link this lesson from a systems page using double-bracket wikilink syntax —
+  an unlinked lesson is invisible to session priming>
 EOF
   echo "created $file"
 }
