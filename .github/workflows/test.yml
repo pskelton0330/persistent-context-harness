@@ -1,0 +1,104 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    # Both platforms on purpose. Development happens on macOS, but the shell
+    # half of the config layer is POSIX-sensitive and Linux ships a different
+    # /bin/sh — the kind of difference that silently changes scope decisions.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ['3.9', '3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install extra shells
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
+
+      - name: Bootstrap
+        run: bash install/bootstrap.sh
+
+      # The keyword path must work with no third-party packages at all — it is
+      # the fallback everything else degrades to.
+      - name: Core works with zero dependencies
+        run: |
+          export KB_RETRIEVER=keyword
+          ./bin/kb --help
+          ./bin/kb context
+          ./bin/kb recall "timeout on startup"
+          ./bin/kb health
+
+      - name: Config and scope resolution
+        run: python3 tests/test_config.py
+
+      - name: Shell/Python parser parity
+        run: bash tests/test_parser_parity.sh
+
+      - name: Hook behaviour
+        run: bash tests/test_hooks.sh
+
+      - name: Selftest reports DEGRADED without the extras
+        run: |
+          out="$(./bin/kb-selftest 2>&1)" || true
+          echo "$out"
+          # Semantic is unavailable here, so claiming plain OK would be a lie.
+          echo "$out" | grep -q "DEGRADED" || {
+            echo "::error::kb-selftest did not report DEGRADED without the extras"; exit 1; }
+
+      - name: Weekly deterministic steps
+        run: bash weekly/run-weekly.sh --no-agent
+
+      - name: No generated state is committable
+        run: |
+          git status --porcelain > /tmp/dirty
+          if [ -s /tmp/dirty ]; then
+            echo "::error::running the harness left stageable files:"; cat /tmp/dirty; exit 1
+          fi
+
+  extras:
+    # Semantic search needs a venv and native wheels. No embedding backend runs
+    # in CI, so this proves the machinery installs and that recall degrades
+    # cleanly rather than crashing when the backend is absent.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: bash install/bootstrap.sh
+      - run: bash install/install-extras.sh
+      - name: Index build fails cleanly with no backend
+        run: |
+          set +e
+          ./bin/kb index; rc=$?
+          set -e
+          [ "$rc" -ne 0 ] || { echo "::error::kb index should fail without a backend"; exit 1; }
+      - name: Recall still works via keyword fallback
+        run: ./bin/kb recall "timeout on startup"
+      - name: Retriever reports unavailable rather than crashing
+        run: |
+          set +e
+          ./bin/kb index --check; rc=$?
+          set -e
+          [ "$rc" -eq 2 ] || { echo "::error::expected exit 2 (fall back), got $rc"; exit 1; }
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No secrets or private data in the tree
+        run: bash scripts/scan-secrets.sh

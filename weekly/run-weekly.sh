@@ -58,7 +58,17 @@ say "out:   $OUT_DIR"
 # ---------------------------------------------------------------------------
 # Deterministic steps
 # ---------------------------------------------------------------------------
-step reindex "$ROOT/bin/kb" index --incremental
+# Only when semantic is configured. On a keyword-only install there is no index
+# to rebuild, and reporting a FAILED step for something that does not apply is a
+# false alarm — which is corrosive here specifically, because this job's value
+# depends on a failure report being believed.
+if [ "$KB_RETRIEVER" = "semantic" ]; then
+  step reindex "$ROOT/bin/kb" index --incremental
+else
+  say ""
+  say "---- reindex ----"
+  say "[reindex] skipped (KB_RETRIEVER=$KB_RETRIEVER, no semantic index)"
+fi
 
 retrieval_stats() {
   local py="${KB_PYTHON:-python3}"
