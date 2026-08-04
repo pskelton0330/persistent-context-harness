@@ -85,7 +85,11 @@ Never hand-edit `~/.claude/settings.json`. The script preserves every other
 setting, keeps hooks belonging to anything else, is idempotent, and writes a
 timestamped backup. Show them the `--dry-run` output first.
 
-If `codex` is installed: `bash install/install-codex.sh`.
+If `codex` is installed, **ask before running `install/install-codex.sh`**.
+Codex has no merge format for `~/.codex/hooks.json`, so installing REPLACES it.
+If the user already has a Codex integration, that integration stops working.
+The installer backs the file up and says so, but the user should choose. This
+is the only step that can break something they already rely on.
 
 ## Step 5 — Build and verify
 
@@ -134,7 +138,10 @@ Finally: they must **restart Claude Code** for the hooks to load.
 
 ## Rules while doing this
 
-- Ask before touching anything in `$HOME` outside this repo.
+- Ask before touching anything in `$HOME` outside this repo. This includes
+  `~/.codex/` and `~/.agents/`, not just `~/.claude/`. If the user sandboxed one
+  path, assume they want the others sandboxed too, and ask — even if they said
+  to proceed without questions.
 - Never write their knowledge base for them. It starts empty on purpose.
 - If a step fails, stop and diagnose. Do not continue past a failure and report
   success at the end.

@@ -95,18 +95,25 @@ if [ "$KB_RETRIEVER" = "semantic" ]; then
     ok "semantic extras importable"
     # A brand-new knowledge base has no lessons yet. That is the expected
     # starting state, not a fault, and it is the first thing a new user sees.
-    n_lessons=$(ls -1 "$KB_ROOT"/lessons/*.md 2>/dev/null | wc -l | tr -d ' ')
     set +e
+    # Counted inside `set +e`: with an empty lessons/ the glob matches nothing,
+    # ls exits 1, and pipefail propagates that into the assignment — aborting
+    # the whole selftest on precisely the fresh install this branch exists to
+    # handle. Found by an agent running the documented setup end to end.
+    n_lessons=$(ls -1 "$KB_ROOT"/lessons/*.md 2>/dev/null | wc -l | tr -d ' ')
     "$py" "$PCH_ROOT/lib/retrieval/lesson_retriever.py" --check >/tmp/pch-idx.$$ 2>&1
     rc=$?
     set -e
     if [ "${n_lessons:-0}" -eq 0 ]; then
       info "no lessons yet — capture your first with: kb lesson \"<title>\""
       rm -f /tmp/pch-idx.$$
+      empty_kb=1
       rc=0
     fi
-    if [ "$rc" -eq 0 ]; then
-      ok "semantic index healthy ($(grep -c . /tmp/pch-idx.$$ >/dev/null 2>&1; grep '^lessons:' /tmp/pch-idx.$$ | head -1))"
+    if [ "${empty_kb:-0}" -eq 1 ]; then
+      : # already reported above; nothing to grep, the temp file is gone
+    elif [ "$rc" -eq 0 ]; then
+      ok "semantic index healthy ($(grep '^lessons:' /tmp/pch-idx.$$ 2>/dev/null | head -1))"
     else
       warn "semantic index unusable: $(grep -E 'healthy:|index (missing|unreadable)' /tmp/pch-idx.$$ | head -1)"
       warn "  build it with: bin/kb index"
