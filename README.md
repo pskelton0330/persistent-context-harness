@@ -50,6 +50,10 @@ Then point it at your own notes and projects:
 $EDITOR config/harness.env       # KB_ROOT + KB_WORK_ROOTS
 ```
 
+Setting this up on a new machine, or handing it to someone else? See
+**[docs/getting-started.md](docs/getting-started.md)** for the full walkthrough,
+including what to expect in the first few weeks.
+
 ## Wiring your agents
 
 Each integration is independent — wire only what you use.
