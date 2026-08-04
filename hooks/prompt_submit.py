@@ -61,14 +61,24 @@ SYMPTOM_RE = re.compile("|".join(SYMPTOM_PATTERNS), re.IGNORECASE)
 # Screened before the prompt reaches a retriever, a log, or an embedding
 # backend. UserPromptSubmit hooks can run in parallel, so this cannot rely on
 # another hook having sanitized the text first.
-SECRET_PATTERNS = [
-    r"(?is)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----",
-    r"(?im)^\s*(password|passwd|token|api[_ -]?key|secret|value)\s*[:=]\s*\S{8,}\s*$",
-    r"\bAKIA[0-9A-Z]{16}\b",
-    r"\bgh[pousr]_[A-Za-z0-9]{20,}\b",
-    r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b",
+# Compiled INDIVIDUALLY, not joined with "|": several need their own inline
+# flags, and Python requires a global flag like (?i) to sit at the very start of
+# the whole expression. Joining them raises PatternError at import, which would
+# make this hook fail on every single prompt.
+SECRET_RES = [
+    re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----", re.IGNORECASE | re.DOTALL),
+    re.compile(
+        r"^\s*(password|passwd|token|api[_ -]?key|secret|value)\s*[:=]\s*\S{8,}\s*$",
+        re.IGNORECASE | re.MULTILINE,
+    ),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"),
+    re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
 ]
-SECRET_RE = re.compile("|".join(SECRET_PATTERNS))
+
+
+def looks_like_secret(text: str) -> bool:
+    return any(pattern.search(text) for pattern in SECRET_RES)
 
 MAX_PROMPT_CHARS = 8000
 
@@ -145,7 +155,7 @@ def main() -> int:
         return 0
 
     # 3. Credentials never reach a retriever, a log, or an embedding backend.
-    if SECRET_RE.search(prompt):
+    if looks_like_secret(prompt):
         return 0
 
     # 4. Only problem-shaped prompts.
