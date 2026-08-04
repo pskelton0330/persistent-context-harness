@@ -14,6 +14,32 @@ info() { printf '  %s\n' "$1"; }
 
 warn() { printf '  \033[33mWARN\033[0m  %s\n' "$*"; }
 
+# Is a keychain backend actually usable on this machine? Distinguishes "not
+# installed" from "installed but broken" — only the second is a real failure.
+degraded=0
+degraded_why=""
+_pch_secret_hint=""
+_pch_secret_backend_present() {
+  case "${KB_SECRET_BACKEND:-auto}" in
+    macos) command -v security >/dev/null 2>&1 ;;
+    libsecret) command -v secret-tool >/dev/null 2>&1 ;;
+    *)
+      if [ "$(uname -s)" = Darwin ]; then
+        command -v security >/dev/null 2>&1
+      else
+        command -v secret-tool >/dev/null 2>&1
+      fi
+      ;;
+  esac
+}
+case "${KB_SECRET_BACKEND:-auto}" in
+  macos) _pch_secret_hint="expected the 'security' command" ;;
+  libsecret) _pch_secret_hint="install libsecret-tools, e.g. apt-get install libsecret-tools" ;;
+  *) [ "$(uname -s)" = Darwin ] \
+       && _pch_secret_hint="expected the 'security' command" \
+       || _pch_secret_hint="install libsecret-tools, e.g. apt-get install libsecret-tools" ;;
+esac
+
 echo "== core =="
 KB="$PCH_BIN_DIR/kb"
 
@@ -33,6 +59,13 @@ sidx="$(mktemp)"; alias="pch.selftest.$$"; fake="selftest-fake-value-$$"
 if printf '%s\n' "$fake" | KB_SECRET_INDEX="$sidx" "$PCH_BIN_DIR/secret" put "$alias" >/dev/null 2>&1 \
    && [ "$(KB_SECRET_INDEX="$sidx" "$PCH_BIN_DIR/secret" get "$alias" 2>/dev/null)" = "$fake" ]; then
   ok "secret put/get round-trips via the keychain"
+elif ! _pch_secret_backend_present; then
+  # No keychain backend installed. That is an environment gap, not a broken
+  # system: priming, recall and capture do not depend on the secret CLI. Linux
+  # images frequently ship without libsecret, and failing the whole selftest
+  # over it would train people to ignore a red result.
+  warn "no keychain backend — secret storage unavailable ($_pch_secret_hint)"
+  degraded=1; degraded_why="$degraded_why secret-storage"
 else bad "secret put/get"; fi
 # cleanup keychain entry (best effort, both backends)
 security delete-generic-password -a "$alias" -s "$KB_SECRET_SERVICE" >/dev/null 2>&1 || true
@@ -50,15 +83,14 @@ else bad "credential-guard"; fi
 # with a green check and a system that never surfaces a lesson.
 # ---------------------------------------------------------------------------
 echo "== retrieval =="
-degraded=0
 if [ "$KB_RETRIEVER" = "semantic" ]; then
   py="${KB_PYTHON:-python3}"
   if ! command -v "$py" >/dev/null 2>&1; then
     warn "KB_PYTHON ($py) not executable — semantic disabled, keyword only"
-    degraded=1
+    degraded=1; degraded_why="$degraded_why semantic"
   elif ! "$py" -c 'import requests, sqlite_vec' >/dev/null 2>&1; then
     warn "extras missing (requests/sqlite-vec) — run: bash install/install-extras.sh"
-    degraded=1
+    degraded=1; degraded_why="$degraded_why semantic"
   else
     ok "semantic extras importable"
     set +e
@@ -70,7 +102,7 @@ if [ "$KB_RETRIEVER" = "semantic" ]; then
     else
       warn "semantic index unusable: $(grep -E 'healthy:|index (missing|unreadable)' /tmp/pch-idx.$$ | head -1)"
       warn "  build it with: bin/kb index"
-      degraded=1
+      degraded=1; degraded_why="$degraded_why semantic-index"
     fi
     rm -f /tmp/pch-idx.$$
   fi
@@ -155,8 +187,10 @@ fi
 if [ "${degraded:-0}" -ne 0 ]; then
   # Deliberately not "OK". The core works, but recall is running in its weaker
   # mode, and saying so plainly is the whole point of this check.
-  echo "  DEGRADED — core works, but semantic recall is unavailable."
-  echo "  Recall falls back to keyword matching, which is noticeably noisier."
+  echo "  DEGRADED — core works, but some capabilities are unavailable:${degraded_why}"
+  case "$degraded_why" in
+    *semantic*) echo "  Recall falls back to keyword matching, which is noticeably noisier." ;;
+  esac
   echo "  Fix the warnings above, then re-run."
   exit 0
 fi
