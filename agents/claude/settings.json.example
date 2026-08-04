@@ -5,14 +5,14 @@
       {
         "matcher": "startup|resume|clear",
         "hooks": [
-          { "type": "command", "command": "bash PCH_DIR/hooks/session-start-hook.sh" }
+          { "type": "command", "command": "python3 PCH_DIR/hooks/session_start.py" }
         ]
       }
     ],
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "bash PCH_DIR/hooks/symptom-lesson-retriever.sh" },
+          { "type": "command", "command": "python3 PCH_DIR/hooks/prompt_submit.py" },
           { "type": "command", "command": "python3 PCH_DIR/bin/credential-guard" }
         ]
       }
@@ -28,7 +28,7 @@
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "bash PCH_DIR/hooks/lesson-capture-hook.sh" }
+          { "type": "command", "command": "python3 PCH_DIR/hooks/lesson_capture.py" }
         ]
       }
     ]

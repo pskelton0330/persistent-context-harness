@@ -17,16 +17,35 @@ HERE = os.path.dirname(os.path.realpath(__file__))            # agents/codex/hoo
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))  # repo root
 
 EVENT_HOOK = {
-    "session-start": "hooks/session-start-hook.sh",
-    "user-prompt-submit": "hooks/symptom-lesson-retriever.sh",
+    "session-start": "hooks/session_start.py",
+    "user-prompt-submit": "hooks/prompt_submit.py",
     "post-tool-use": "hooks/post-tool-use-hook.sh",
-    "stop": "hooks/lesson-capture-hook.sh",
+    "stop": "hooks/lesson_capture.py",
 }
 
 
 def emit(text: str) -> None:
-    if text:
+    """Forward hook output to Codex.
+
+    The shared hooks already emit a JSON envelope for Claude Code. Pass that
+    straight through when present rather than nesting it inside another
+    envelope, and only wrap plain text.
+    """
+    if not text:
+        return
+    try:
+        parsed = json.loads(text)
+    except ValueError:
         print(json.dumps({"additionalContext": text}))
+        return
+    if isinstance(parsed, dict) and "hookSpecificOutput" in parsed:
+        inner = parsed["hookSpecificOutput"].get("additionalContext", "")
+        if inner:
+            print(json.dumps({"additionalContext": inner}))
+        return
+    # Anything else (e.g. the Stop hook's {"decision": ...}) is already the
+    # shape the host expects.
+    print(text)
 
 
 def main() -> int:
@@ -36,9 +55,12 @@ def main() -> int:
         return 0
     raw = sys.stdin.read()
     try:
+        path = os.path.join(ROOT, script)
+        # Dispatch by extension: the shared hooks are Python, with one
+        # remaining shell helper.
+        runner = [sys.executable, path] if path.endswith(".py") else ["bash", path]
         out = subprocess.run(
-            ["bash", os.path.join(ROOT, script)],
-            input=raw, capture_output=True, text=True, timeout=15,
+            runner, input=raw, capture_output=True, text=True, timeout=15,
         )
     except Exception:
         return 0
