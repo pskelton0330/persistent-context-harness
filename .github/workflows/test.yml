@@ -45,6 +45,9 @@ jobs:
       - name: Config and scope resolution
         run: python3 tests/test_config.py
 
+      - name: Claude settings merge is non-destructive
+        run: python3 tests/test_settings_merge.py
+
       - name: Shell/Python parser parity
         run: bash tests/test_parser_parity.sh
 
