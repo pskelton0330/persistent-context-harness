@@ -68,6 +68,9 @@ jobs:
       - name: Hook behaviour
         run: bash tests/test_hooks.sh
 
+      - name: Codex hook shim envelope
+        run: python tests/test_codex_hook.py
+
       # The Windows secret backend is DPAPI (PowerShell), a code path neither
       # macOS Keychain nor libsecret exercises. Assert the round-trip explicitly
       # rather than leaning on its incidental use inside kb-selftest.

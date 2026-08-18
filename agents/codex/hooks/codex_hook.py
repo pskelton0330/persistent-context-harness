@@ -39,9 +39,13 @@ def emit(text: str) -> None:
         print(json.dumps({"additionalContext": text}))
         return
     if isinstance(parsed, dict) and "hookSpecificOutput" in parsed:
-        inner = parsed["hookSpecificOutput"].get("additionalContext", "")
-        if inner:
-            print(json.dumps({"additionalContext": inner}))
+        # Pass the Claude envelope through UNCHANGED. Codex reads the same
+        # {"hookSpecificOutput": {"hookEventName", "additionalContext"}} shape,
+        # so unwrapping it to a bare {"additionalContext"} made Codex ignore the
+        # injected context entirely — SessionStart priming fired but silently
+        # reached the model as nothing. Verified on Codex 0.140: with passthrough
+        # a primed session names its injected system; with the unwrap it did not.
+        print(text)
         return
     # Anything else (e.g. the Stop hook's {"decision": ...}) is already the
     # shape the host expects.

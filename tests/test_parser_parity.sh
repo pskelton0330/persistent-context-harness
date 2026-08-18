@@ -36,6 +36,15 @@ SHELLS=""
 for candidate in bash zsh sh dash ksh; do
   command -v "$candidate" >/dev/null 2>&1 && SHELLS="$SHELLS $candidate"
 done
+# On Windows (MSYS/MINGW/Cygwin) the harness only ever runs under bash — Git Bash
+# is what Claude Code and the CLIs use. MSYS also ships a minimal `dash` that
+# cannot self-locate a sourced file (no BASH_SOURCE, and its `$0` under `-c`
+# differs), which the harness never relies on there. Testing it would report a
+# failure for a shell that is never used on the platform, so scope parity to bash
+# on Windows. Unix keeps testing every available POSIX shell.
+case "$(uname -s 2>/dev/null)" in
+  MINGW*|MSYS*|CYGWIN*) SHELLS=" bash" ;;
+esac
 
 # Read one variable the way the SHELL implementation does.
 shell_value() {
