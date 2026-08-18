@@ -46,5 +46,7 @@ cp "$ROOT/agents/shared-skill/context-kb/SKILL.md" "$AGENTS_HOME/skills/context-
 cp "$ROOT/agents/shared-skill/context-kb/agents/openai.yaml" "$AGENTS_HOME/skills/context-kb/agents/openai.yaml"
 echo "Installed shared skill -> $AGENTS_HOME/skills/context-kb"
 
-echo "Restart Codex, then trust the hooks with /hooks (Codex will not run them"
-echo "until you do). They fire in interactive Codex sessions, not 'codex exec'."
+echo "Restart Codex, then trust the hooks with /hooks (Codex records a per-hook"
+echo "hash and will not run them until you approve — re-approve after any change)."
+echo "Once trusted, recall/capture/tool hooks run in interactive AND 'codex exec';"
+echo "SessionStart priming runs in interactive Codex sessions only."

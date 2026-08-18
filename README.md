@@ -62,12 +62,15 @@ Each integration is independent — wire only what you use.
   harness hooks into `~/.claude/settings.json` (preserving your other settings,
   with a backup), using the right interpreter and path form for your OS.
 - **Codex / ChatGPT** — `bash install/install-codex.sh`. Codex gates hooks
-  behind an explicit trust step: after installing, open Codex and approve them
-  with `/hooks`. The lifecycle hooks fire in **interactive** Codex sessions, not
-  in `codex exec` (headless). The Claude path is verified end-to-end in CI; the
-  Codex path is not yet covered by CI — confirm it interactively (open Codex in a
-  folder named like one of your `systems/<name>.md` pages and check it was
-  primed).
+  behind an explicit trust step: it records a per-hook hash in `config.toml`, so
+  after installing (or after any change to the hooks), open Codex and approve
+  them with `/hooks`. Once trusted, the `UserPromptSubmit`, `PostToolUse` and
+  `Stop` hooks fire in both interactive and `codex exec` sessions (recall,
+  capture, edit-tracking — verified by observing Codex invoke them). `SessionStart`
+  priming fires in **interactive** Codex sessions only, not in `codex exec`. The
+  Claude path is verified end-to-end in CI; the Codex path is not covered by CI,
+  so confirm priming interactively (open Codex in a folder named like one of your
+  `systems/<name>.md` pages and check it was primed).
 - **Hermes** (optional, external) — `bash install/install-hermes.sh`.
 
 Works on macOS, Linux, and Windows. On Windows, run the commands from Git Bash
