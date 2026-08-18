@@ -105,6 +105,12 @@ If the user already has a Codex integration, that integration stops working.
 The installer backs the file up and says so, but the user should choose. This
 is the only step that can break something they already rely on.
 
+After installing for Codex, tell the user they must **trust the hooks with
+`/hooks`** inside Codex — Codex will not run them until they do. The lifecycle
+hooks fire in interactive Codex sessions, not in `codex exec`. Unlike the Claude
+path (verified in CI), Codex hook firing is not covered by CI, so have them
+confirm it once interactively.
+
 ## Step 5 — Build and verify
 
 ```sh

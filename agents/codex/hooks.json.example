@@ -1,5 +1,4 @@
 {
-  "_comment": "Installed to ~/.codex/hooks.json by install/install-codex.sh, which rewrites PCH_DIR to your checkout path and PCH_PY to the interpreter token (python3 on macOS/Linux, python on Windows). The credential-guard runs on every prompt to block raw secrets.",
   "hooks": {
     "SessionStart": [
       {

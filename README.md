@@ -61,7 +61,13 @@ Each integration is independent — wire only what you use.
 - **Claude Code** — `bash install/install-claude.sh`. It safely merges the
   harness hooks into `~/.claude/settings.json` (preserving your other settings,
   with a backup), using the right interpreter and path form for your OS.
-- **Codex / ChatGPT** — `bash install/install-codex.sh`.
+- **Codex / ChatGPT** — `bash install/install-codex.sh`. Codex gates hooks
+  behind an explicit trust step: after installing, open Codex and approve them
+  with `/hooks`. The lifecycle hooks fire in **interactive** Codex sessions, not
+  in `codex exec` (headless). The Claude path is verified end-to-end in CI; the
+  Codex path is not yet covered by CI — confirm it interactively (open Codex in a
+  folder named like one of your `systems/<name>.md` pages and check it was
+  primed).
 - **Hermes** (optional, external) — `bash install/install-hermes.sh`.
 
 Works on macOS, Linux, and Windows. On Windows, run the commands from Git Bash

@@ -46,4 +46,5 @@ cp "$ROOT/agents/shared-skill/context-kb/SKILL.md" "$AGENTS_HOME/skills/context-
 cp "$ROOT/agents/shared-skill/context-kb/agents/openai.yaml" "$AGENTS_HOME/skills/context-kb/agents/openai.yaml"
 echo "Installed shared skill -> $AGENTS_HOME/skills/context-kb"
 
-echo "Restart Codex, then review and trust the hooks with /hooks if prompted."
+echo "Restart Codex, then trust the hooks with /hooks (Codex will not run them"
+echo "until you do). They fire in interactive Codex sessions, not 'codex exec'."
