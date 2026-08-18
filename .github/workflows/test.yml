@@ -8,15 +8,29 @@ on:
 
 jobs:
   test:
-    # Both platforms on purpose. Development happens on macOS, but the shell
-    # half of the config layer is POSIX-sensitive and Linux ships a different
-    # /bin/sh — the kind of difference that silently changes scope decisions.
+    # All three platforms on purpose. Development happens on macOS; Linux ships a
+    # different /bin/sh (the shell config parser is POSIX-sensitive); and Windows
+    # runs under Git Bash with a native `python` (no `python3`) — the exact
+    # environment the OS-aware paths exist for. Without a Windows runner the
+    # Windows support can regress silently.
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python: ['3.9', '3.12']
+        # 3.9 is not offered for the arm64 macOS runner setup-python uses.
+        exclude:
+          - os: macos-latest
+            python: '3.9'
+
+    # Run every step under bash on all three OSes. GitHub's Windows runners ship
+    # Git Bash, so the POSIX `run:` bodies and `bash tests/*.sh` steps behave the
+    # same everywhere. Steps invoke the interpreter as `python` (setup-python
+    # provides it on all platforms; `python3` is not reliable on Windows).
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - uses: actions/checkout@v4
@@ -43,16 +57,30 @@ jobs:
           ./bin/kb health
 
       - name: Config and scope resolution
-        run: python3 tests/test_config.py
+        run: python tests/test_config.py
 
       - name: Claude settings merge is non-destructive
-        run: python3 tests/test_settings_merge.py
+        run: python tests/test_settings_merge.py
 
       - name: Shell/Python parser parity
         run: bash tests/test_parser_parity.sh
 
       - name: Hook behaviour
         run: bash tests/test_hooks.sh
+
+      # The Windows secret backend is DPAPI (PowerShell), a code path neither
+      # macOS Keychain nor libsecret exercises. Assert the round-trip explicitly
+      # rather than leaning on its incidental use inside kb-selftest.
+      - name: Windows secret store (DPAPI) round-trips
+        if: runner.os == 'Windows'
+        run: |
+          export KB_SECRET_INDEX="$RUNNER_TEMP/idx"
+          printf 'ci-dpapi-value\n' | ./bin/secret put ci.dpapi.test
+          got="$(./bin/secret get ci.dpapi.test)"
+          [ "$got" = "ci-dpapi-value" ] || { echo "::error::DPAPI round-trip returned '$got'"; exit 1; }
+          # Invalid aliases must be refused, not silently coerced onto a filename.
+          if ./bin/secret get 'a/b' 2>/dev/null; then
+            echo "::error::secret accepted an invalid alias"; exit 1; fi
 
       - name: Selftest reports DEGRADED without the extras
         run: |
@@ -67,15 +95,18 @@ jobs:
 
       - name: No generated state is committable
         run: |
-          git status --porcelain > /tmp/dirty
-          if [ -s /tmp/dirty ]; then
-            echo "::error::running the harness left stageable files:"; cat /tmp/dirty; exit 1
+          git status --porcelain > "$RUNNER_TEMP/dirty"
+          if [ -s "$RUNNER_TEMP/dirty" ]; then
+            echo "::error::running the harness left stageable files:"; cat "$RUNNER_TEMP/dirty"; exit 1
           fi
 
   extras:
     # Semantic search needs a venv and native wheels. No embedding backend runs
     # in CI, so this proves the machinery installs and that recall degrades
-    # cleanly rather than crashing when the backend is absent.
+    # cleanly rather than crashing when the backend is absent. Ubuntu only: the
+    # sqlite-vec wheel is reliably available here, whereas its availability on
+    # the Windows/macOS-arm runners is an external constraint that install-extras
+    # already detects and reports at install time.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -28,12 +28,20 @@ echo "== context-harness extras =="
 # 3.14 with a broken pyexpat is a current example), and venv creation fails
 # midway. Probing is a few seconds and turns a confusing stack trace into an
 # automatic fallback.
+# The interpreter inside a venv, across layouts: Unix puts it at bin/python,
+# Windows at Scripts/python.exe. Echoes the path, or returns 1 if neither exists.
+_venv_py() {
+  if   [ -e "$1/bin/python" ];         then printf '%s\n' "$1/bin/python"
+  elif [ -e "$1/Scripts/python.exe" ]; then printf '%s\n' "$1/Scripts/python.exe"
+  else return 1; fi
+}
+
 usable_python() {
   local candidate="$1" probe rc
   command -v "$candidate" >/dev/null 2>&1 || return 1
   "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)' 2>/dev/null || return 1
   probe="$(mktemp -d)"
-  "$candidate" -m venv "$probe/v" >/dev/null 2>&1 && [ -x "$probe/v/bin/python" ]
+  "$candidate" -m venv "$probe/v" >/dev/null 2>&1 && _venv_py "$probe/v" >/dev/null 2>&1
   rc=$?
   rm -rf "$probe"
   return $rc
@@ -47,7 +55,9 @@ if [ -n "${PYTHON_OVERRIDE:-}" ]; then
     && PYTHON="$PYTHON_OVERRIDE" \
     || { echo "error: PYTHON_OVERRIDE=$PYTHON_OVERRIDE cannot create a venv" >&2; exit 1; }
 else
-  for candidate in python3 python3.13 python3.12 python3.11 python3.10 python3.9; do
+  # `python` last so Unix keeps preferring python3, but Windows (where the
+  # interpreter is only ever `python`) is still covered.
+  for candidate in python3 python3.13 python3.12 python3.11 python3.10 python3.9 python; do
     if usable_python "$candidate"; then PYTHON="$candidate"; break; fi
     command -v "$candidate" >/dev/null 2>&1 \
       && echo "-- skipping $candidate ($("$candidate" -V 2>&1)): cannot create a working venv"
@@ -70,7 +80,8 @@ echo "-- python $("$PYTHON" -V 2>&1) ($(command -v "$PYTHON"))"
 # Reuse only a venv that actually works. A previous failed run can leave one
 # that exists but has no pip (an interrupted ensurepip), and reusing that fails
 # later with a far more confusing error than just rebuilding it.
-if [ -x "$VENV/bin/python" ] && "$VENV/bin/python" -m pip --version >/dev/null 2>&1; then
+VENV_PY="$(_venv_py "$VENV" 2>/dev/null || true)"
+if [ -n "$VENV_PY" ] && "$VENV_PY" -m pip --version >/dev/null 2>&1; then
   echo "-- reusing existing venv at $VENV"
 else
   if [ -e "$VENV" ]; then
@@ -84,7 +95,8 @@ else
     exit 1
   fi
 fi
-VENV_PY="$VENV/bin/python"
+# Resolve the interpreter for whatever layout venv produced (bin/ or Scripts/).
+VENV_PY="$(_venv_py "$VENV")" || { echo "error: no interpreter in the venv at $VENV" >&2; exit 1; }
 
 echo "-- installing requests + sqlite-vec"
 "$VENV_PY" -m pip install --quiet --upgrade pip >/dev/null 2>&1 || true
@@ -114,13 +126,41 @@ echo "-- verified: sqlite-vec loads and vec0 tables work"
 # ---------------------------------------------------------------------------
 # Record KB_PYTHON
 # ---------------------------------------------------------------------------
+# Validate the value BEFORE touching CONFIG, so an unrepresentable path can
+# never leave the config half-rewritten with the old KB_PYTHON already stripped.
+# Double-quoting lets the value carry spaces (common on Windows) or a '#'; a
+# literal double-quote cannot be encoded in this grammar and is refused.
+case "$VENV_PY" in
+  *'"'*|*$'\n'*|*$'\r'*)
+    echo "error: venv path contains a double-quote or line separator; cannot encode" >&2
+    echo "       KB_PYTHON safely in the line-oriented config grammar: $VENV_PY" >&2
+    exit 1 ;;
+esac
 touch "$CONFIG"
-if grep -qE '^[[:space:]]*(export[[:space:]]+)?KB_PYTHON=' "$CONFIG" 2>/dev/null; then
-  tmp="$CONFIG.tmp.$$"
-  grep -vE '^[[:space:]]*(export[[:space:]]+)?KB_PYTHON=' "$CONFIG" > "$tmp"
-  mv "$tmp" "$CONFIG"
+# Build the ENTIRE new config (existing lines minus any KB_PYTHON, plus the new
+# assignment) in one sibling temp file, then a single atomic rename. This way a
+# failure at any stage leaves the original CONFIG untouched — the old two-step
+# "filter then append" could lose the prior KB_PYTHON if the append failed.
+#
+# The file is READ by the harness, never sourced, so a double-quoted value is
+# literal (the only expansion the grammar performs is a LEADING ~/ or $HOME/,
+# which an absolute interpreter path never has). A literal '"' cannot be encoded
+# and was already rejected above.
+tmp="$CONFIG.tmp.$$"
+if (
+     set +e
+     grep -vE '^[[:space:]]*(export[[:space:]]+)?KB_PYTHON=' "$CONFIG"
+     g=$?
+     # 0 = lines kept, 1 = every line was KB_PYTHON (fine), >=2 = real error.
+     [ "$g" -le 1 ] || exit 2
+     printf 'KB_PYTHON="%s"\n' "$VENV_PY"
+   ) > "$tmp"; then
+  mv -f "$tmp" "$CONFIG" || { rm -f "$tmp"; echo "error: could not replace $CONFIG; left unchanged" >&2; exit 1; }
+else
+  rm -f "$tmp"
+  echo "error: could not rewrite $CONFIG; left unchanged" >&2
+  exit 1
 fi
-printf 'KB_PYTHON=%s\n' "$VENV_PY" >> "$CONFIG"
 echo "-- set KB_PYTHON in $CONFIG"
 
 # ---------------------------------------------------------------------------

@@ -31,6 +31,15 @@ LOG="$OUT_DIR/run.log"
 STATUS="$KB_STATE_DIR/weekly/last-run.json"
 mkdir -p "$OUT_DIR"
 
+# Clear this run's own draft artifacts up front. The output dir is keyed by date,
+# so a second run on the same day would otherwise inherit the previous run's
+# drafts — and if an agent step fails this time, a STALE draft would still be
+# presented in the review queue as if freshly produced. The append-only run.log
+# is kept on purpose (it is history), as are the deterministic outputs, which
+# every run overwrites.
+rm -f "$OUT_DIR"/lesson-audit.md "$OUT_DIR"/crosslinks.md "$OUT_DIR"/gap-review.md \
+      "$OUT_DIR"/*.raw "$OUT_DIR"/*.err 2>/dev/null || true
+
 FAILED=0
 STEPS_OK=""
 STEPS_FAILED=""
@@ -69,7 +78,7 @@ say "out:   $OUT_DIR"
 # A build that fails when the extras ARE present is a real failure and stays loud.
 semantic_available() {
   [ "$KB_RETRIEVER" = "semantic" ] || return 1
-  local py="${KB_PYTHON:-python3}"
+  local py="${KB_PYTHON:-$PCH_PYTHON}"
   command -v "$py" >/dev/null 2>&1 || return 1
   "$py" -c 'import requests, sqlite_vec' >/dev/null 2>&1
 }
@@ -88,7 +97,7 @@ else
 fi
 
 retrieval_stats() {
-  local py="${KB_PYTHON:-python3}"
+  local py="${KB_PYTHON:-$PCH_PYTHON}"
   "$py" "$ROOT/lib/retrieval/retrieval_log.py" --days 30 --json > "$OUT_DIR/retrieval-stats.json"
   "$py" "$ROOT/lib/retrieval/retrieval_log.py" --days 30
 }
@@ -156,17 +165,58 @@ fi
 # Written every run, success or failure, and read by `kb health` and
 # kb-selftest. A scheduled job that fails quietly is worse than no job: the
 # whole point is that you find out.
-cat > "$STATUS" <<EOF
-{
-  "ran_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "output_dir": "$OUT_DIR",
-  "failed_steps": $FAILED,
-  "ok": "${STEPS_OK# }",
-  "failed": "${STEPS_FAILED# }",
-  "agent": "${KB_WEEKLY_AGENT:-claude}",
-  "used_agent": $USE_AGENT
+# Serialized with a real JSON encoder, not string interpolation: KB_WEEKLY_AGENT
+# is user-configurable (e.g. `claude --model "x"`) and a quote or backslash in it
+# — or in a configured path — would otherwise produce invalid JSON that kb health
+# and kb-selftest then fail to parse. Written to a temp file and renamed so a
+# crash mid-write cannot truncate the previous status. Values travel via the
+# environment to avoid any shell re-quoting.
+# Publish a written temp file over $STATUS atomically. A failed rename is itself
+# a failure worth surfacing: a silently stale last-run.json would let a broken
+# scheduled job look healthy. On failure, keep the previous status and bump the
+# failure count so the run exits non-zero.
+publish_status() { # $1 = temp file to promote
+  if mv -f "$1" "$STATUS" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$1"
+  say "[status] FAILED to publish $STATUS (kept previous)"
+  FAILED=$((FAILED + 1))
+  return 1
 }
-EOF
+
+STATUS_TMP="$STATUS.tmp.$$"
+if PCH_RAN_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+   PCH_OUT_DIR="$OUT_DIR" PCH_FAILED="$FAILED" \
+   PCH_OK="${STEPS_OK# }" PCH_FAILEDS="${STEPS_FAILED# }" \
+   PCH_AGENT="${KB_WEEKLY_AGENT:-claude}" PCH_USED="$USE_AGENT" \
+   "${KB_PYTHON:-$PCH_PYTHON}" -c '
+import json, os, sys
+json.dump({
+    "ran_at": os.environ["PCH_RAN_AT"],
+    "output_dir": os.environ["PCH_OUT_DIR"],
+    "failed_steps": int(os.environ["PCH_FAILED"]),
+    "ok": os.environ["PCH_OK"],
+    "failed": os.environ["PCH_FAILEDS"],
+    "agent": os.environ["PCH_AGENT"],
+    "used_agent": bool(int(os.environ["PCH_USED"])),
+}, open(sys.argv[1], "w"), indent=2)
+open(sys.argv[1], "a").write("\n")
+' "$STATUS_TMP" 2>/dev/null; then
+  publish_status "$STATUS_TMP" || true
+else
+  # Encoder failed. Write a minimal valid status the SAME atomic way (temp then
+  # rename) so this fallback path cannot itself truncate the previous status.
+  rm -f "$STATUS_TMP"
+  if printf '{"ran_at":"%s","failed_steps":%s}\n' \
+       "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$FAILED" > "$STATUS_TMP" 2>/dev/null; then
+    publish_status "$STATUS_TMP" || true
+  else
+    rm -f "$STATUS_TMP"   # leave the prior status intact rather than corrupt it
+    say "[status] FAILED to write status; kept previous"
+    FAILED=$((FAILED + 1))
+  fi
+fi
 
 say ""
 say "================================================================"

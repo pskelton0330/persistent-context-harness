@@ -1,0 +1,18 @@
+# Line-ending policy — explicit so a Windows checkout is deterministic.
+#
+# Everything here is authored for POSIX shells and native interpreters. CRLF in
+# a shell script breaks the shebang under Git Bash ("bad interpreter"), and a
+# checkout that rewrites line endings makes tracked files look modified — which
+# would fail the "no generated state is committable" CI check on Windows. Force
+# LF for all text so all three platforms see identical bytes.
+* text=auto eol=lf
+
+# Extensionless executables in bin/ (no suffix to match on).
+bin/kb                text eol=lf
+bin/kb-selftest       text eol=lf
+bin/secret            text eol=lf
+bin/credential-guard  text eol=lf
+bin/hermes-context    text eol=lf
+
+# Encrypted secret blobs (Windows DPAPI backend) are binary; never touch them.
+*.dpapi binary
