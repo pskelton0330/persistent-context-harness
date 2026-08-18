@@ -23,21 +23,25 @@ _pch_secret_backend_present() {
   case "${KB_SECRET_BACKEND:-auto}" in
     macos) command -v security >/dev/null 2>&1 ;;
     libsecret) command -v secret-tool >/dev/null 2>&1 ;;
+    windows) command -v powershell.exe >/dev/null 2>&1 || command -v powershell >/dev/null 2>&1 ;;
     *)
-      if [ "$(uname -s)" = Darwin ]; then
-        command -v security >/dev/null 2>&1
-      else
-        command -v secret-tool >/dev/null 2>&1
-      fi
+      case "$PCH_OS" in
+        mac) command -v security >/dev/null 2>&1 ;;
+        windows) command -v powershell.exe >/dev/null 2>&1 || command -v powershell >/dev/null 2>&1 ;;
+        *) command -v secret-tool >/dev/null 2>&1 ;;
+      esac
       ;;
   esac
 }
 case "${KB_SECRET_BACKEND:-auto}" in
   macos) _pch_secret_hint="expected the 'security' command" ;;
   libsecret) _pch_secret_hint="install libsecret-tools, e.g. apt-get install libsecret-tools" ;;
-  *) [ "$(uname -s)" = Darwin ] \
-       && _pch_secret_hint="expected the 'security' command" \
-       || _pch_secret_hint="install libsecret-tools, e.g. apt-get install libsecret-tools" ;;
+  windows) _pch_secret_hint="expected Windows PowerShell (powershell.exe) on PATH" ;;
+  *) case "$PCH_OS" in
+       mac) _pch_secret_hint="expected the 'security' command" ;;
+       windows) _pch_secret_hint="expected Windows PowerShell (powershell.exe) on PATH" ;;
+       *) _pch_secret_hint="install libsecret-tools, e.g. apt-get install libsecret-tools" ;;
+     esac ;;
 esac
 
 echo "== core =="
@@ -67,13 +71,14 @@ elif ! _pch_secret_backend_present; then
   warn "no keychain backend — secret storage unavailable ($_pch_secret_hint)"
   degraded=1; degraded_why="$degraded_why secret-storage"
 else bad "secret put/get"; fi
-# cleanup keychain entry (best effort, both backends)
+# cleanup keychain entry (best effort, all backends)
 security delete-generic-password -a "$alias" -s "$KB_SECRET_SERVICE" >/dev/null 2>&1 || true
 secret-tool clear service "$KB_SECRET_SERVICE" account "$alias" >/dev/null 2>&1 || true
+rm -f "$KB_STATE_DIR"/secrets/*selftest* 2>/dev/null || true
 rm -f "$sidx"
 
 if printf '{"prompt":"the token=abcdef0123456789xyz is here"}' \
-   | python3 "$PCH_BIN_DIR/credential-guard" 2>/dev/null | grep -q '"block"'; then
+   | "$PCH_PYTHON" "$PCH_BIN_DIR/credential-guard" 2>/dev/null | grep -q '"block"'; then
   ok "credential-guard blocks a raw secret"
 else bad "credential-guard"; fi
 
@@ -84,7 +89,7 @@ else bad "credential-guard"; fi
 # ---------------------------------------------------------------------------
 echo "== retrieval =="
 if [ "$KB_RETRIEVER" = "semantic" ]; then
-  py="${KB_PYTHON:-python3}"
+  py="${KB_PYTHON:-$PCH_PYTHON}"
   if ! command -v "$py" >/dev/null 2>&1; then
     warn "KB_PYTHON ($py) not executable — semantic disabled, keyword only"
     degraded=1; degraded_why="$degraded_why semantic"
@@ -131,7 +136,7 @@ fi
 # ---------------------------------------------------------------------------
 echo "== hooks =="
 for h in session_start prompt_submit lesson_capture; do
-  if [ -f "$PCH_ROOT/hooks/$h.py" ] && python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$PCH_ROOT/hooks/$h.py" >/dev/null 2>&1; then
+  if [ -f "$PCH_ROOT/hooks/$h.py" ] && "$PCH_PYTHON" -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$PCH_ROOT/hooks/$h.py" >/dev/null 2>&1; then
     ok "hooks/$h.py present and parses"
   else
     bad "hooks/$h.py"
@@ -158,8 +163,8 @@ else
   fi
   # Stale means the schedule is not firing, which looks identical to "nothing
   # to do" unless it is checked.
-  if [ -n "$ran" ] && command -v python3 >/dev/null 2>&1; then
-    age=$(python3 -c "
+  if [ -n "$ran" ] && command -v "$PCH_PYTHON" >/dev/null 2>&1; then
+    age=$("$PCH_PYTHON" -c "
 import datetime,sys
 try:
     d=datetime.datetime.fromisoformat('$ran'.replace('Z','+00:00'))

@@ -32,10 +32,16 @@ prerequisite-free.
 ## Step 1 — Check prerequisites
 
 ```sh
-python3 --version          # need 3.9+
+python3 --version          # need 3.9+   (on Windows: python --version)
 command -v claude codex    # which agents to wire
 command -v ollama          # optional, enables semantic search
 ```
+
+**On Windows:** run every command in this guide from **Git Bash** (bundled with
+Git for Windows; Claude Code already requires it). The interpreter is `python`,
+not `python3` — the installers and hooks detect this for you, so you do not
+substitute it by hand. WSL is not required; this runs against native-Windows
+Claude Code / Codex.
 
 If `ollama` is missing, tell them semantic search needs it (~274 MB model,
 runs locally, prompts never leave the machine) and ask whether to continue
@@ -67,17 +73,25 @@ there — it set `KB_PYTHON`):
 
 ```
 KB_ROOT=<their-kb>
-KB_WORK_ROOTS=<dir1>:<dir2>:<dir3>
-KB_RETRIEVER=semantic          # or keyword if they declined
+KB_WORK_ROOTS=<dir1>:<dir2>:<dir3>     # separator is ':' on macOS/Linux, ';' on Windows
+KB_RETRIEVER=semantic                 # or keyword if they declined
 ```
 
 Grammar is strict: `KEY=value`, no quotes needed, no shell expansion except a
-leading `~/`. Use absolute paths.
+leading `~/`. Use absolute paths. On Windows, use forward slashes and the ';'
+separator, e.g. `KB_WORK_ROOTS=C:/code/api;C:/code/web`.
 
 ## Step 4 — Wire the agents
 
 ```sh
-python3 install/merge-claude-settings.py --dry-run   # show them what changes
+bash install/install-claude.sh      # shows the dry-run, then merges (OS-aware)
+```
+
+That wrapper fills in the right interpreter (`python3`/`python`) and path form
+for the OS, then runs the merge. To preview or drive it directly:
+
+```sh
+python3 install/merge-claude-settings.py --dry-run   # on Windows: python ...
 python3 install/merge-claude-settings.py
 ```
 

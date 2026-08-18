@@ -26,12 +26,27 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# How the generated hook commands name the interpreter and the repo path, per
+# OS. Claude Code runs these command strings through its own shell on each
+# platform, and what is on that PATH differs:
+#   - Windows ships the interpreter as `python`; there is no `python3`.
+#   - `bash` is present in the hook context on every platform (Claude Code
+#     requires Git Bash on Windows), so it stays literal.
+#   - Paths use POSIX forward slashes via Path.as_posix(): on Unix that is the
+#     native path unchanged; on Windows it yields "C:/Users/..." which both the
+#     native Python interpreter AND Git Bash accept, while backslashes would
+#     need escaping in JSON and would break the `bash <path>` argument.
+_IS_WINDOWS = os.name == "nt"
+PY = "python" if _IS_WINDOWS else "python3"
+ROOT_POSIX = ROOT.as_posix()
 
 
 def harness_hooks() -> dict:
@@ -40,25 +55,25 @@ def harness_hooks() -> dict:
         "SessionStart": [
             {
                 "matcher": "startup|resume|clear",
-                "hooks": [{"type": "command", "command": f"python3 {ROOT}/hooks/session_start.py"}],
+                "hooks": [{"type": "command", "command": f"{PY} {ROOT_POSIX}/hooks/session_start.py"}],
             }
         ],
         "UserPromptSubmit": [
             {
                 "hooks": [
-                    {"type": "command", "command": f"python3 {ROOT}/hooks/prompt_submit.py"},
-                    {"type": "command", "command": f"python3 {ROOT}/bin/credential-guard"},
+                    {"type": "command", "command": f"{PY} {ROOT_POSIX}/hooks/prompt_submit.py"},
+                    {"type": "command", "command": f"{PY} {ROOT_POSIX}/bin/credential-guard"},
                 ]
             }
         ],
         "PostToolUse": [
             {
                 "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-                "hooks": [{"type": "command", "command": f"bash {ROOT}/hooks/post-tool-use-hook.sh"}],
+                "hooks": [{"type": "command", "command": f"bash {ROOT_POSIX}/hooks/post-tool-use-hook.sh"}],
             }
         ],
         "Stop": [
-            {"hooks": [{"type": "command", "command": f"python3 {ROOT}/hooks/lesson_capture.py"}]}
+            {"hooks": [{"type": "command", "command": f"{PY} {ROOT_POSIX}/hooks/lesson_capture.py"}]}
         ],
     }
 
@@ -67,10 +82,15 @@ def is_ours(entry: dict) -> bool:
     """Does this entry belong to this harness install?
 
     Matched on the harness root appearing in a command, so hooks the user wrote
-    themselves — or another tool's — are never touched.
+    themselves — or another tool's — are never touched. Both the native spelling
+    and the POSIX spelling are checked so entries written by an older install
+    (or on the other path convention) are still recognized and cleanly replaced
+    rather than duplicated.
     """
+    needles = {str(ROOT), ROOT_POSIX}
     for hook in entry.get("hooks", []) or []:
-        if str(ROOT) in str(hook.get("command", "")):
+        command = str(hook.get("command", ""))
+        if any(needle in command for needle in needles):
             return True
     return False
 

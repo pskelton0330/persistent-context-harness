@@ -48,6 +48,23 @@ def emit(text: str) -> None:
     print(text)
 
 
+def _bash_exe() -> str:
+    """Locate bash; 'bash' alone if already on PATH (Unix, and Windows hook
+    contexts where Git Bash is exported)."""
+    import shutil
+
+    found = shutil.which("bash")
+    if found:
+        return found
+    for candidate in (
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files\Git\usr\bin\bash.exe",
+    ):
+        if os.path.exists(candidate):
+            return candidate
+    return "bash"
+
+
 def main() -> int:
     event = sys.argv[1] if len(sys.argv) > 1 else ""
     script = EVENT_HOOK.get(event)
@@ -56,9 +73,14 @@ def main() -> int:
     raw = sys.stdin.read()
     try:
         path = os.path.join(ROOT, script)
-        # Dispatch by extension: the shared hooks are Python, with one
-        # remaining shell helper.
-        runner = [sys.executable, path] if path.endswith(".py") else ["bash", path]
+        # Dispatch by extension: the shared hooks are Python (run with the same
+        # interpreter as this shim), with one remaining shell helper. On Windows
+        # bash cannot open a backslash path, so hand it a forward-slash one.
+        if path.endswith(".py"):
+            runner = [sys.executable, path]
+        else:
+            bpath = path.replace("\\", "/") if os.name == "nt" else path
+            runner = [_bash_exe(), bpath]
         out = subprocess.run(
             runner, input=raw, capture_output=True, text=True, timeout=15,
         )

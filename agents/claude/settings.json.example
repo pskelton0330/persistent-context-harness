@@ -1,19 +1,19 @@
 {
-  "_comment": "Copy the relevant hooks into your ~/.claude/settings.json (or a project .claude/settings.json). Replace PCH_DIR with the absolute path to your persistent-context-harness checkout, e.g. /home/you/persistent-context-harness.",
+  "_comment": "Reference only — prefer `bash install/install-claude.sh` (or `python install/merge-claude-settings.py`), which fills these in for your OS and merges safely. If copying by hand: replace PCH_DIR with your checkout path (forward slashes even on Windows, e.g. C:/Users/you/persistent-context-harness) and PCH_PY with the interpreter token (python3 on macOS/Linux, python on Windows).",
   "hooks": {
     "SessionStart": [
       {
         "matcher": "startup|resume|clear",
         "hooks": [
-          { "type": "command", "command": "python3 PCH_DIR/hooks/session_start.py" }
+          { "type": "command", "command": "PCH_PY PCH_DIR/hooks/session_start.py" }
         ]
       }
     ],
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "python3 PCH_DIR/hooks/prompt_submit.py" },
-          { "type": "command", "command": "python3 PCH_DIR/bin/credential-guard" }
+          { "type": "command", "command": "PCH_PY PCH_DIR/hooks/prompt_submit.py" },
+          { "type": "command", "command": "PCH_PY PCH_DIR/bin/credential-guard" }
         ]
       }
     ],
@@ -28,7 +28,7 @@
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "python3 PCH_DIR/hooks/lesson_capture.py" }
+          { "type": "command", "command": "PCH_PY PCH_DIR/hooks/lesson_capture.py" }
         ]
       }
     ]

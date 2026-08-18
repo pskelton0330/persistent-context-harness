@@ -56,6 +56,32 @@ fi
 unset _pch_self _src _d
 
 # ---------------------------------------------------------------------------
+# Platform
+# ---------------------------------------------------------------------------
+# One place decides OS-specific behaviour. Git Bash / MSYS / Cygwin report an
+# MINGW*/MSYS*/CYGWIN* uname, which is how a Windows box running the shell CLIs
+# is recognized. Everything downstream keys off PCH_OS rather than re-running
+# uname, so the rules can never drift between call sites.
+case "$(uname -s 2>/dev/null)" in
+  MINGW*|MSYS*|CYGWIN*) PCH_OS=windows ;;
+  Darwin)               PCH_OS=mac ;;
+  Linux)                PCH_OS=linux ;;
+  *)                    PCH_OS=other ;;
+esac
+
+# Separator for KB_WORK_ROOTS / KB_EXCLUDED_ROOTS. It is os.pathsep: ';' on
+# Windows, ':' elsewhere. A Unix ':' would split a Windows path on its drive
+# letter ("C:\Users" -> "C", "\Users"), which silently breaks project scope.
+if [ "$PCH_OS" = windows ]; then PCH_PATHSEP=";"; else PCH_PATHSEP=":"; fi
+
+# The plain interpreter for stdlib scripts. Windows ships it as `python`, not
+# `python3`; Unix as `python3`. Callers that honour KB_PYTHON (the venv with the
+# semantic extras) apply that override themselves — this is only the fallback.
+if command -v python3 >/dev/null 2>&1; then PCH_PYTHON=python3
+elif command -v python >/dev/null 2>&1; then PCH_PYTHON=python
+else PCH_PYTHON=python3; fi
+
+# ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 # The config file is READ, never sourced. Sourcing let shell and Python diverge
@@ -348,7 +374,7 @@ pch_in_work_scope() {
     _r="$(_pch_canon "$_root")" || _r="$_root"
     case "$_p/" in "$_r"/*|"$_r"/) _hit=0 ;; esac
   done <<EOF
-$(_pch_split "$KB_WORK_ROOTS" ':')
+$(_pch_split "$KB_WORK_ROOTS" "$PCH_PATHSEP")
 EOF
   unset _p _r _root
   return $_hit
@@ -373,7 +399,7 @@ pch_should_retrieve() {
     _r="$(_pch_canon "$_root")" || _r="$_root"
     case "$_p/" in "$_r"/*|"$_r"/) _excluded=1 ;; esac
   done <<EOF
-$(_pch_split "${KB_EXCLUDED_ROOTS:-}" ':')
+$(_pch_split "${KB_EXCLUDED_ROOTS:-}" "$PCH_PATHSEP")
 EOF
   unset _p _kb _r _root
   [ "$_excluded" -eq 0 ]

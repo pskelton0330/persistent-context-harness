@@ -168,7 +168,11 @@ def _resolve(path_text: str | os.PathLike[str]) -> Path:
 
 
 def _split_roots(raw: str) -> list[Path]:
-    parts = [part for part in raw.split(":") if part.strip()]
+    # os.pathsep, not a literal ":" — on Windows the separator is ";", and a ":"
+    # split would tear a path apart on its drive letter ("C:\\Users" -> "C",
+    # "\\Users"), silently emptying project scope. Mirrors PCH_PATHSEP in
+    # bin/_common.sh so shell and Python agree on how a root list is delimited.
+    parts = [part for part in raw.split(os.pathsep) if part.strip()]
     return [_resolve(_expand_home(part.strip())) for part in parts[:MAX_ROOTS]]
 
 

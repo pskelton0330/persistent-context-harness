@@ -49,7 +49,11 @@ class MergeTests(unittest.TestCase):
         ]
 
     def ours(self) -> int:
-        return sum(str(ROOT) in c for c in self.commands())
+        # The generated commands spell the path with forward slashes
+        # (Path.as_posix()), so on Windows str(ROOT) — which uses backslashes —
+        # would never match. Check both spellings, mirroring is_ours().
+        needles = (str(ROOT), ROOT.as_posix())
+        return sum(any(n in c for n in needles) for c in self.commands())
 
     # -- core guarantees --------------------------------------------------
 

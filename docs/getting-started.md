@@ -10,15 +10,20 @@ deliberately point two installs at the same directory.
 ## Before you start
 
 Required:
-- `git` and Python **3.9+**
+- `git` and Python **3.9+** (invoked as `python3` on macOS/Linux, `python` on
+  Windows — the installers detect which)
 - Claude Code and/or Codex
+- **On Windows:** run the commands from **Git Bash** (bundled with Git for
+  Windows, which Claude Code already requires). WSL is not needed — this works
+  against native-Windows Claude Code / Codex.
 
 Optional but recommended:
 - [Ollama](https://ollama.com) for semantic search — one model, ~274 MB, runs
   locally. Without it recall falls back to keyword matching, which works but is
   noticeably noisier.
 - A keychain for the `secret` CLI: built in on macOS; on Linux
-  `apt-get install libsecret-tools`. Priming, recall and capture do not need it.
+  `apt-get install libsecret-tools`; on Windows it uses DPAPI (PowerShell, built
+  in). Priming, recall and capture do not need it.
 
 ## 1. Install the harness
 

@@ -5,8 +5,9 @@ captures lessons, and manages credentials. It is designed so that using it does
 **not** leak your secrets or private content. The rules:
 
 ## 1. Secrets never touch files or git
-Raw credential values live only in the OS keychain (macOS Keychain or Linux
-libsecret), accessed through the `secret` CLI:
+Raw credential values live only in the OS keychain — macOS Keychain, Linux
+libsecret, or on Windows a per-user DPAPI-encrypted store (only the same Windows
+account can decrypt it) — accessed through the `secret` CLI:
 
 ```
 secret put example.db.password          # prompted, not echoed, not written to disk

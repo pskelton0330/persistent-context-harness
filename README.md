@@ -58,11 +58,15 @@ including what to expect in the first few weeks.
 
 Each integration is independent — wire only what you use.
 
-- **Claude Code** — `bash install/install-claude.sh`, then merge the generated
-  `config/claude-settings.generated.json` `"hooks"` block into
-  `~/.claude/settings.json`.
+- **Claude Code** — `bash install/install-claude.sh`. It safely merges the
+  harness hooks into `~/.claude/settings.json` (preserving your other settings,
+  with a backup), using the right interpreter and path form for your OS.
 - **Codex / ChatGPT** — `bash install/install-codex.sh`.
 - **Hermes** (optional, external) — `bash install/install-hermes.sh`.
+
+Works on macOS, Linux, and Windows. On Windows, run the commands from Git Bash
+(bundled with Git for Windows) against native-Windows Claude Code / Codex — WSL
+is not required.
 
 ## Retrieval
 
@@ -156,7 +160,7 @@ liability, not a feature.
 | `KB_EMBED_MODEL` / `KB_EMBED_URL` | embedding backend |
 | `KB_WEEKLY_AGENT` | agent CLI for the weekly review |
 | `KB_STATE_DIR` | generated state; kept outside `KB_ROOT` so it never enters your notes' git history |
-| `KB_SECRET_BACKEND` | `auto` / `macos` / `libsecret` |
+| `KB_SECRET_BACKEND` | `auto` / `macos` / `libsecret` / `windows` |
 
 The file is *read*, not sourced, using one strict grammar shared by the shell and
 Python halves — `KEY=value`, `#` comments, values literal apart from a leading

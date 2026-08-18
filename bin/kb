@@ -54,7 +54,7 @@ cmd_recall() {
 
   local semantic_out="" rc=1
   if [ "$KB_RETRIEVER" = "semantic" ]; then
-    local py="${KB_PYTHON:-python3}"
+    local py="${KB_PYTHON:-$PCH_PYTHON}"
     if command -v "$py" >/dev/null 2>&1; then
       set +e
       semantic_out="$("$py" "$PCH_ROOT/lib/retrieval/lesson_retriever.py" "$*" 2>/dev/null)"
@@ -74,8 +74,8 @@ cmd_recall() {
 }
 
 cmd_index() {
-  local py="${KB_PYTHON:-python3}"
-  command -v "$py" >/dev/null 2>&1 || pch_die "no python3 (set KB_PYTHON in config/harness.env)"
+  local py="${KB_PYTHON:-$PCH_PYTHON}"
+  command -v "$py" >/dev/null 2>&1 || pch_die "no python interpreter found (set KB_PYTHON in config/harness.env)"
   case "${1:-}" in
     --check) exec "$py" "$PCH_ROOT/lib/retrieval/lesson_retriever.py" --check ;;
     *) exec "$py" "$PCH_ROOT/lib/retrieval/index_lessons.py" "$@" ;;

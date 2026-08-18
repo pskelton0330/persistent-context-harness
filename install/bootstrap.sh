@@ -7,7 +7,12 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
-case "$(uname -s)" in Darwin) OS=mac ;; Linux) OS=linux ;; *) OS=other ;; esac
+case "$(uname -s)" in
+  Darwin) OS=mac ;;
+  Linux) OS=linux ;;
+  MINGW*|MSYS*|CYGWIN*) OS=windows ;;
+  *) OS=other ;;
+esac
 
 echo "== persistent-context-harness core bootstrap ($OS) =="
 echo "   repo: $ROOT"
@@ -24,10 +29,16 @@ else
   echo "-- config/harness.env already exists"
 fi
 
-# 3. Dependency check (core needs only bash + python3; git optional).
+# 3. Dependency check (core needs only bash + python; git optional).
+# The interpreter is `python3` on Unix and `python` on Windows — accept either
+# so a Windows box (where there is no `python3`) is not reported as missing it.
 echo "== core dependencies =="
-for c in bash python3; do command -v "$c" >/dev/null 2>&1 && echo "  ok      $c" || echo "  MISSING $c"; done
+command -v bash >/dev/null 2>&1 && echo "  ok      bash" || echo "  MISSING bash"
+if command -v python3 >/dev/null 2>&1; then echo "  ok      python3"
+elif command -v python >/dev/null 2>&1; then echo "  ok      python (python3 not present — expected on Windows)"
+else echo "  MISSING python3/python"; fi
 [ "$OS" = linux ] && { command -v secret-tool >/dev/null 2>&1 && echo "  ok      secret-tool" || echo "  MISSING secret-tool (libsecret; needed for the secret CLI on Linux)"; }
+[ "$OS" = windows ] && { command -v powershell.exe >/dev/null 2>&1 && echo "  ok      powershell (secret CLI uses DPAPI)" || echo "  MISSING powershell.exe (needed for the secret CLI on Windows)"; }
 
 cat <<EOF
 

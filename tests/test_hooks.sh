@@ -17,6 +17,19 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# The interpreter is python3 on Unix, python on Windows (no python3 there).
+if command -v python3 >/dev/null 2>&1; then PYBIN=python3
+elif command -v python >/dev/null 2>&1; then PYBIN=python
+else echo "no python interpreter found" >&2; exit 1; fi
+
+# On Windows the hooks run under native Python, which cannot resolve an MSYS
+# path like /tmp/... to the directory Git Bash actually created. Re-spell the
+# workspace as a Windows path both sides agree on (forward slashes: valid for
+# Git Bash AND native Python). cygpath exists only under MSYS/Cygwin, so this is
+# a no-op everywhere else. The EXIT trap expands $WORK lazily, so it cleans up
+# the re-spelled path — the same directory — correctly.
+if command -v cygpath >/dev/null 2>&1; then WORK="$(cygpath -m "$WORK")"; fi
+
 KB="$WORK/kb"
 PROJECT="$WORK/project"
 mkdir -p "$KB/lessons" "$KB/systems" "$PROJECT/sub"
@@ -73,7 +86,7 @@ PASS=0; FAIL=0
 # run <hook> <json>  -> sets OUT, ERR, RC
 run_hook() {
   local hook="$1" payload="$2"
-  OUT="$(printf '%s' "$payload" | python3 "$REPO/hooks/$hook" 2>"$WORK/stderr")"
+  OUT="$(printf '%s' "$payload" | "$PYBIN" "$REPO/hooks/$hook" 2>"$WORK/stderr")"
   RC=$?
   ERR="$(cat "$WORK/stderr")"
 }

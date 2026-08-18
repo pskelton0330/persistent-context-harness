@@ -15,6 +15,9 @@ set -u
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
+# On Windows, keep the workspace in a form native Python and Git Bash both
+# resolve identically (see the note in test_hooks.sh). No-op off MSYS/Cygwin.
+if command -v cygpath >/dev/null 2>&1; then WORK="$(cygpath -m "$WORK")"; fi
 
 # A throwaway harness root. bin/_common.sh locates itself by real path, so the
 # files must be copied rather than symlinked for PCH_ROOT to land here.
@@ -25,6 +28,10 @@ cp -R "$REPO/lib" "$HARNESS/lib"
 
 PASS=0
 FAIL=0
+# python3 on Unix, python on Windows (Git Bash has no python3).
+if command -v python3 >/dev/null 2>&1; then PYBIN=python3
+elif command -v python >/dev/null 2>&1; then PYBIN=python
+else echo "no python interpreter found" >&2; exit 1; fi
 SHELLS=""
 for candidate in bash zsh sh dash ksh; do
   command -v "$candidate" >/dev/null 2>&1 && SHELLS="$SHELLS $candidate"
@@ -43,7 +50,7 @@ shell_value() {
 # Read the same variable the way the PYTHON implementation does.
 python_value() {
   local key="$1"
-  python3 - "$HARNESS" "$key" <<'PY' 2>/dev/null
+  "$PYBIN" - "$HARNESS" "$key" <<'PY' 2>/dev/null
 import sys
 from pathlib import Path
 root = Path(sys.argv[1])
@@ -145,7 +152,11 @@ check "embed dim"                     KB_EMBED_DIM 'KB_EMBED_DIM=1024\n'
 check "secret backend"                KB_SECRET_BACKEND 'KB_SECRET_BACKEND=macos\n'
 check "secret service"                KB_SECRET_SERVICE 'KB_SECRET_SERVICE=my-svc\n'
 check "python path"                   KB_PYTHON 'KB_PYTHON=/usr/bin/python3\n'
-check "state dir"                     KB_STATE_DIR 'KB_STATE_DIR=/tmp/pch-state\n'
+# Based on $WORK (an existing dir) rather than a literal /tmp path: path keys
+# are compared after canonicalizing both sides, which needs the parent to
+# exist. A hard-coded Unix "/tmp/..." also has no consistent meaning on Windows,
+# where Python resolves it to "C:\\tmp\\..." while the shell keeps it literal.
+check "state dir"                     KB_STATE_DIR "KB_STATE_DIR=$WORK/pch-state\n"
 
 # Typed/normalized values must normalize identically on both sides.
 check "retriever mixed case"          KB_RETRIEVER 'KB_RETRIEVER=SeMaNtIc\n'

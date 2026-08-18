@@ -138,7 +138,10 @@ class TestScope(ConfigTestCase):
     def config(self) -> HarnessConfig:
         return self.write_config(
             f'KB_ROOT="{self.root}/mykb"\n'
-            f'KB_WORK_ROOTS="{self.root}/proj-a:{self.root}/proj-b"\n'
+            # os.pathsep, not a literal ":" — the harness splits root lists on
+            # the platform separator (";" on Windows), and a hard-coded ":"
+            # would make this two-root config parse as one on Windows.
+            f'KB_WORK_ROOTS="{self.root}/proj-a{os.pathsep}{self.root}/proj-b"\n'
         )
 
     def test_work_roots_and_subdirs_are_in_scope(self) -> None:
@@ -169,10 +172,14 @@ class TestScope(ConfigTestCase):
         self.assertFalse(should_retrieve(self.root / "proj-b", cfg))
 
     def test_project_roots_json_takes_precedence(self) -> None:
+        # as_posix() so the path is JSON-valid on Windows too: a raw "C:\\..."
+        # embeds backslashes that are invalid JSON escapes, which would make the
+        # file parse-fail and the harness (correctly) ignore it.
+        rootp = self.root.as_posix()
         self.write_roots_json(
             '{"version": 1, "project_roots": ['
-            f'{{"path": "{self.root}/elsewhere", "enabled": true}},'
-            f'{{"path": "{self.root}/proj-a", "enabled": false}}'
+            f'{{"path": "{rootp}/elsewhere", "enabled": true}},'
+            f'{{"path": "{rootp}/proj-a", "enabled": false}}'
             "]}"
         )
         cfg = self.config()
@@ -236,7 +243,7 @@ class TestReviewFindings(ConfigTestCase):
     def test_f2_roots_json_as_list_of_strings(self) -> None:
         """F2: entries were assumed to be objects; a string entry raised
         AttributeError on .get()."""
-        self.write_roots_json(f'{{"project_roots": ["{self.root}/proj-a"]}}')
+        self.write_roots_json(f'{{"project_roots": ["{self.root.as_posix()}/proj-a"]}}')
         cfg = self.write_config(f'KB_ROOT="{self.root}/mykb"\n')
         self.assertIn(str((self.root / "proj-a").resolve()), [str(p) for p in cfg.project_roots])
 

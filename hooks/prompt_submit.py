@@ -140,8 +140,39 @@ def parse_hits(text: str, keyword_form: bool = False) -> list[dict]:
     ]
 
 
+def _kb_recall_cmd(prompt: str) -> list[str]:
+    """Command that runs `kb recall`, correct for the current OS.
+
+    bin/kb is a bash script. On Unix it is executable and runs directly. On
+    Windows there is no exec bit and the shebang is meaningless, so a bare
+    subprocess of it raises OSError and recall silently returns nothing — it
+    must be handed to bash explicitly, with a forward-slash path Git Bash can
+    open (a backslash path would not resolve).
+    """
+    kb = ROOT / "bin" / "kb"
+    if os.name == "nt":
+        return [_bash_exe(), kb.as_posix(), "recall", prompt]
+    return [str(kb), "recall", prompt]
+
+
+def _bash_exe() -> str:
+    """Locate bash on Windows; 'bash' alone if it is already on PATH."""
+    import shutil
+
+    found = shutil.which("bash")
+    if found:
+        return found
+    for candidate in (
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files\Git\usr\bin\bash.exe",
+    ):
+        if os.path.exists(candidate):
+            return candidate
+    return "bash"
+
+
 def keyword(prompt: str) -> str:
-    code, out = run([str(ROOT / "bin" / "kb"), "recall", prompt], 15)
+    code, out = run(_kb_recall_cmd(prompt), 15)
     if code != 0 or not out or out.startswith("(no matching"):
         return ""
     return (
