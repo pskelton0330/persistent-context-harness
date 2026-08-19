@@ -47,6 +47,22 @@ esac
 echo "== core =="
 KB="$PCH_BIN_DIR/kb"
 
+# Privacy advisory. The wiki/ shipped with this repo is a FICTIONAL EXAMPLE;
+# real notes belong in a private KB_ROOT OUTSIDE the repo. KB_ROOT defaults to
+# the repo wiki/, so warn if it still points inside the checkout: captured
+# lessons would then live in a clone of a public repo. (.gitignore already makes
+# such content un-committable, but it should not sit there at all.)
+_pch_kb_real="$(cd "$KB_ROOT" 2>/dev/null && pwd -P)/"
+_pch_root_real="$(cd "$PCH_ROOT" 2>/dev/null && pwd -P)"
+case "$_pch_kb_real" in
+  "$_pch_root_real"/*)
+    warn "KB_ROOT is inside this repo ($KB_ROOT) — the wiki/ here is only an EXAMPLE."
+    warn "  Set KB_ROOT to a private directory OUTSIDE the repo (edit config/harness.env)"
+    warn "  so your real notes never live in a clone of a public repo."
+    ;;
+esac
+unset _pch_kb_real _pch_root_real
+
 "$KB" context >/dev/null 2>&1 && ok "kb context runs" || bad "kb context"
 "$KB" recall "startup timeout error" >/dev/null 2>&1 && ok "kb recall runs" || bad "kb recall"
 "$KB" health >/dev/null 2>&1 && ok "kb health runs (example KB clean)" || bad "kb health"

@@ -29,6 +29,26 @@ private/
 local/
 *.private.md
 
+# ── ENFORCED privacy backstop for the example wiki/. The wiki/ here is a
+#    FICTIONAL EXAMPLE only; real content belongs in a private KB_ROOT OUTSIDE
+#    this repo. But KB_ROOT defaults to this wiki/, so a capture (or an agent
+#    following the setup) can drop real lessons/system pages in here. These rules
+#    make that content UN-COMMITTABLE: everything under the KB subdirectories is
+#    ignored except the shipped example files and the .gitkeep placeholders. So
+#    even a `git add -A` cannot leak private knowledge into this public repo. ──
+wiki/lessons/*
+wiki/systems/*
+wiki/runbooks/*
+wiki/reference/*
+wiki/components/*
+wiki/decisions/*
+!wiki/runbooks/.gitkeep
+!wiki/reference/.gitkeep
+!wiki/components/.gitkeep
+!wiki/decisions/.gitkeep
+!wiki/lessons/2024-01-01-example-lesson.md
+!wiki/systems/example-service.md
+
 # ── Secrets must never be committed. Raw values live in the OS keychain. ──
 .env
 *.env

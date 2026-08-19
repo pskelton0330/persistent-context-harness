@@ -45,7 +45,11 @@ cat <<EOF
 == next steps ==
   1. Add the CLIs to your PATH:
        export PATH="$ROOT/bin:\$PATH"   # add to ~/.bashrc or ~/.zshrc
-  2. (optional) Point KB_ROOT at your real notes dir in config/harness.env.
+  2. IMPORTANT — set KB_ROOT to a PRIVATE directory OUTSIDE this repo in
+       config/harness.env. The wiki/ here is a fictional example; if you leave
+       KB_ROOT unset it defaults to this repo's wiki/, so your real notes would
+       land in a clone of a public repo. (.gitignore blocks committing them, but
+       keep them out entirely.)  e.g.  KB_ROOT=\$HOME/knowledge-base/wiki
   3. Verify: bin/kb-selftest
 
   Wire only the agent(s) you use — each is independent:
